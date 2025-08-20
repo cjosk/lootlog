@@ -3,18 +3,53 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Albion Online Loot Karşılaştırma Paneli</title>
+    <title>Team Supremacy Loot Takip Paneli</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         body {
             font-family: 'Inter', sans-serif;
+            background-color: #0c0a09; /* stone-950 */
+            overflow-x: hidden;
+        }
+        /* Fareyi takip eden aydınlatma efekti */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            background: radial-gradient(
+                600px circle at var(--mouse-x) var(--mouse-y),
+                rgba(45, 27, 105, 0.2),
+                transparent 80%
+            );
+            z-index: -1;
+        }
+        .glass-panel {
+            background: rgba(28, 25, 23, 0.5); /* stone-900/50 */
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 1rem;
         }
         .hidden-input { display: none; }
-        .tab-btn { transition: background-color 0.3s, color 0.3s; }
-        .tab-btn.active { background-color: #4f46e5; color: white; }
-
-        /* Görsel Stiller */
+        .tab-btn { 
+            position: relative;
+            transition: color 0.3s; 
+        }
+        .tab-btn.active::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background-color: #6366f1; /* indigo-500 */
+            border-radius: 2px;
+        }
         .item-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
@@ -24,15 +59,15 @@
             position: relative;
             width: 68px;
             height: 68px;
-            background-color: #1f2937; /* gray-800 */
-            border: 2px solid #4b5563; /* gray-600 */
-            border-radius: 8px;
+            background-color: rgba(12, 10, 9, 0.7); /* stone-950/70 */
+            border: 2px solid #44403c; /* stone-700 */
+            border-radius: 0.5rem;
             overflow: hidden;
             transition: border-color 0.3s, box-shadow 0.3s;
         }
         .item-slot-dead {
             border-color: #ef4444; /* red-500 */
-            box-shadow: 0 0 8px rgba(239, 68, 68, 0.7);
+            box-shadow: 0 0 10px rgba(239, 68, 68, 0.6);
         }
         .item-slot img {
             width: 100%;
@@ -54,85 +89,114 @@
             left: 0;
             width: 100%;
             height: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            border-radius: 0.375rem;
         }
         .overlay-kept-safe {
              background-color: rgba(107, 114, 128, 0.7); /* gray-500 with opacity */
         }
+        .fade-in {
+            animation: fadeIn 0.5s ease-in-out forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .gemini-summary-container pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
     </style>
 </head>
-<body class="bg-gray-900 text-gray-200 min-h-screen p-4 sm:p-8">
-    <div class="max-w-7xl mx-auto">
-        <!-- Başlık Alanı -->
-        <div class="text-center mb-8">
-            <h1 class="text-3xl sm:text-4xl font-bold text-white mb-2">Albion Online Loot Takip Paneli</h1>
-            <p class="text-gray-400">Loot ve Sandık loglarını karşılaştırarak kimin neyi tuttuğunu görün.</p>
-        </div>
-
-        <!-- Log Giriş Alanları -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
+<body class="text-gray-200">
+    <div class="max-w-7xl mx-auto p-4 sm:p-8">
+        <!-- Header -->
+        <header class="flex items-center gap-5 mb-10">
+            <img src="https://i.hizliresim.com/pu29soc.png" alt="Team Supremacy Logosu" class="w-14 h-14 rounded-md">
             <div>
-                <div class="flex justify-between items-center mb-2">
-                    <label for="lootLog" class="block text-lg font-semibold text-cyan-400">Loot Logları (TXT Dosyası)</label>
-                    <label for="lootLogFile" class="bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-4 rounded-lg cursor-pointer transition">Dosya Yükle</label>
-                    <input type="file" id="lootLogFile" class="hidden-input" accept=".txt">
-                </div>
-                <p id="lootLogFileName" class="text-sm text-gray-500 h-5 mb-1"></p>
-                <textarea id="lootLog" rows="12" class="w-full p-4 bg-gray-800 border-2 border-gray-700 rounded-lg text-gray-300 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition" placeholder="Dosya yükleyin veya logları buraya yapıştırın..."></textarea>
+                <h1 class="text-3xl sm:text-4xl font-extrabold text-white">Team Supremacy</h1>
+                <p class="text-gray-400">Loot Takip Paneli</p>
             </div>
-            <div>
-                <div class="flex justify-between items-center mb-2">
-                    <label for="chestLog" class="block text-lg font-semibold text-amber-400">Guild Sandığı Logları</label>
-                     <label for="chestLogFile" class="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg cursor-pointer transition">Dosya Yükle</label>
-                    <input type="file" id="chestLogFile" class="hidden-input" accept=".txt">
-                </div>
-                 <p id="chestLogFileName" class="text-sm text-gray-500 h-5 mb-1"></p>
-                <textarea id="chestLog" rows="12" class="w-full p-4 bg-gray-800 border-2 border-gray-700 rounded-lg text-gray-300 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition" placeholder="Dosya yükleyin, manuel ekleyin veya yapıştırın..."></textarea>
-            </div>
-        </div>
+        </header>
 
-        <!-- Buton -->
-        <div class="text-center mb-8">
-            <button id="compareBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-lg text-lg transition-transform transform hover:scale-105 shadow-lg">Logları Karşılaştır</button>
-        </div>
-        
-        <!-- Arama Çubuğu -->
-        <div id="search-wrapper" class="hidden my-6 max-w-lg mx-auto">
-             <div class="relative">
-                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <svg class="h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                        <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
-                    </svg>
+        <main class="space-y-10">
+            <!-- Veri Giriş Alanı -->
+            <section class="glass-panel p-6">
+                <h2 class="text-xl font-bold mb-4 text-white">Veri Girişi</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <label for="lootLog" class="font-semibold text-cyan-400">Loot Logları</label>
+                            <label for="lootLogFile" class="bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-4 rounded-lg cursor-pointer transition text-sm">Dosya Yükle</label>
+                            <input type="file" id="lootLogFile" class="hidden-input" accept=".txt">
+                        </div>
+                        <p id="lootLogFileName" class="text-sm text-gray-500 h-5 mb-1"></p>
+                        <textarea id="lootLog" rows="10" class="w-full p-3 bg-stone-900 border border-stone-700 rounded-lg text-gray-300 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition" placeholder="Loot log dosyasını yükleyin veya içeriği buraya yapıştırın..."></textarea>
+                    </div>
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <label for="chestLog" class="font-semibold text-amber-400">Guild Sandığı Logları</label>
+                            <label for="chestLogFile" class="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg cursor-pointer transition text-sm">Dosya Yükle</label>
+                            <input type="file" id="chestLogFile" class="hidden-input" accept=".txt">
+                        </div>
+                        <p id="chestLogFileName" class="text-sm text-gray-500 h-5 mb-1"></p>
+                        <textarea id="chestLog" rows="10" class="w-full p-3 bg-stone-900 border border-stone-700 rounded-lg text-gray-300 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition" placeholder="Sandık log dosyasını yükleyin veya içeriği buraya yapıştırın..."></textarea>
+                    </div>
                 </div>
-                <input type="text" id="searchInput" class="w-full p-3 pl-10 bg-gray-800 border-2 border-gray-700 rounded-lg text-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Oyuncu adıyla ara...">
-            </div>
-        </div>
-
-
-        <!-- Sonuç Alanı -->
-        <div id="results-wrapper" class="hidden">
-            <!-- Sekme Butonları -->
-            <div class="mb-4 border-b border-gray-700">
-                <nav class="flex flex-wrap -mb-px" aria-label="Tabs">
-                    <button class="tab-btn active whitespace-nowrap py-3 px-4 border-b-2 border-transparent font-medium text-sm text-gray-400 hover:text-white" data-tab="all-players">Tüm Oyuncular</button>
-                    <button class="tab-btn whitespace-nowrap py-3 px-4 border-b-2 border-transparent font-medium text-sm text-gray-400 hover:text-white" data-tab="deposited">Bankaya Atılanlar</button>
-                    <button class="tab-btn whitespace-nowrap py-3 px-4 border-b-2 border-transparent font-medium text-sm text-gray-400 hover:text-white" data-tab="kept">Eşyayı Tutmuş Olanlar</button>
-                    <button class="tab-btn whitespace-nowrap py-3 px-4 border-b-2 border-transparent font-medium text-sm text-gray-400 hover:text-white" data-tab="trash">Trash Eşyalar</button>
-                    <button class="tab-btn whitespace-nowrap py-3 px-4 border-b-2 border-transparent font-medium text-sm text-gray-400 hover:text-white" data-tab="looted-from">Lootlanan Oyuncular</button>
-                    <button class="tab-btn whitespace-nowrap py-3 px-4 border-b-2 border-transparent font-medium text-sm text-gray-400 hover:text-white" data-tab="add-data">Sandık Verisi Ekle</button>
-                </nav>
-            </div>
-            <!-- Sekme İçerikleri -->
-            <div id="results">
-                <!-- İçerik JavaScript ile doldurulacak -->
-            </div>
-        </div>
+                 <!-- Buton -->
+                <div class="text-center mt-6">
+                    <button id="compareBtn" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-10 rounded-lg text-lg transition-all transform hover:scale-105 shadow-lg shadow-indigo-900/50">Analizi Başlat</button>
+                </div>
+            </section>
+            
+            <!-- Sonuç Alanı -->
+            <section id="results-wrapper" class="hidden">
+                <!-- Arama ve Sekmeler -->
+                <div class="glass-panel p-4 mb-6">
+                    <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+                        <!-- Arama Çubuğu -->
+                        <div id="search-wrapper" class="w-full sm:max-w-xs">
+                            <div class="relative">
+                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <svg class="h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" /></svg>
+                                </div>
+                                <input type="text" id="searchInput" class="w-full p-2 pl-10 bg-stone-900 border border-stone-700 rounded-lg text-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Oyuncu ara...">
+                            </div>
+                        </div>
+                        <!-- Sekme Butonları -->
+                        <nav class="flex flex-wrap justify-center gap-4" aria-label="Tabs">
+                            <button class="tab-btn active whitespace-nowrap py-2 px-3 font-medium text-sm text-gray-300 hover:text-white" data-tab="all-players">Tüm Oyuncular</button>
+                            <button class="tab-btn whitespace-nowrap py-2 px-3 font-medium text-sm text-gray-300 hover:text-white" data-tab="deposited">Bankaya Atılanlar</button>
+                            <button class="tab-btn whitespace-nowrap py-2 px-3 font-medium text-sm text-gray-300 hover:text-white" data-tab="kept">Eşyayı Tutanlar</button>
+                            <button class="tab-btn whitespace-nowrap py-2 px-3 font-medium text-sm text-gray-300 hover:text-white" data-tab="trash">Trash</button>
+                            <button class="tab-btn whitespace-nowrap py-2 px-3 font-medium text-sm text-gray-300 hover:text-white" data-tab="looted-from">Ölenler</button>
+                            <button class="tab-btn whitespace-nowrap py-2 px-3 font-medium text-sm text-gray-300 hover:text-white" data-tab="add-data">Veri Ekle</button>
+                        </nav>
+                    </div>
+                </div>
+                 <!-- Gemini Özet Alanı -->
+                <div id="gemini-summary-section" class="mb-6"></div>
+                <!-- Sekme İçerikleri -->
+                <div id="results">
+                    <!-- İçerik JavaScript ile doldurulacak -->
+                </div>
+            </section>
+        </main>
     </div>
 
     <script>
+        // --- GLOBAL STATE ---
+        let currentAnalysisData = {};
+
         // --- SETUP ---
+        // Arka plan aydınlatma efekti
+        document.addEventListener('mousemove', e => {
+            document.body.style.setProperty('--mouse-x', `${e.clientX}px`);
+            document.body.style.setProperty('--mouse-y', `${e.clientY}px`);
+        });
+
         function setupFileInput(inputId, textareaId, fileNameId) {
             const fileInput = document.getElementById(inputId);
             const textarea = document.getElementById(textareaId);
@@ -158,11 +222,13 @@
             const resultsWrapper = document.getElementById('results-wrapper');
             const resultsContainer = document.getElementById('results');
             resultsContainer.innerHTML = '<div class="text-center text-xl font-semibold text-gray-400 p-8">Sonuçlar hesaplanıyor...</div>';
+            document.getElementById('gemini-summary-section').innerHTML = ''; // Clear previous summary
             resultsWrapper.classList.remove('hidden');
+            resultsWrapper.classList.add('fade-in');
             
             try {
-                const analysis = analyzeLogs(lootLogText, chestLogText);
-                displayResults(analysis);
+                currentAnalysisData = analyzeLogs(lootLogText, chestLogText);
+                displayResults(currentAnalysisData);
             } catch (error) {
                 console.error("Log işlenirken bir hata oluştu:", error);
                 resultsContainer.innerHTML = `<div class="bg-red-900 border border-red-700 text-red-200 px-4 py-3 rounded-lg text-center"><strong>Hata!</strong> Log formatı tanınamadı. Detaylar için konsolu kontrol edin (F12).</div>`;
@@ -350,16 +416,16 @@
             const resultsContainer = document.getElementById('results');
             resultsContainer.innerHTML = `
                 <div id="tab-all-players" class="tab-content space-y-6"></div>
-                <div id="tab-deposited" class="tab-content hidden bg-gray-800 border border-gray-700 rounded-lg p-6"></div>
+                <div id="tab-deposited" class="tab-content hidden glass-panel p-6"></div>
                 <div id="tab-kept" class="tab-content hidden space-y-6"></div>
-                <div id="tab-trash" class="tab-content hidden bg-gray-800 border border-gray-700 rounded-lg p-6"></div>
-                <div id="tab-looted-from" class="tab-content hidden bg-gray-800 border border-gray-700 rounded-lg p-6"></div>
-                <div id="tab-add-data" class="tab-content hidden bg-gray-800 border border-gray-700 rounded-lg p-6">
+                <div id="tab-trash" class="tab-content hidden glass-panel p-6"></div>
+                <div id="tab-looted-from" class="tab-content hidden glass-panel p-6"></div>
+                <div id="tab-add-data" class="tab-content hidden glass-panel p-6">
                     <h3 class="text-xl font-semibold text-amber-400 mb-4">Sandığa Manuel Eşya Ekle</h3>
                     <div class="space-y-4 max-w-md">
-                        <div><label for="playerNameInput" class="block mb-1 text-sm font-medium">Oyuncu Adı</label><input type="text" id="playerNameInput" class="w-full bg-gray-700 rounded p-2 border border-gray-600 focus:ring-amber-500 focus:border-amber-500" placeholder="Oyuncu_A"></div>
-                        <div><label for="itemNameInput" class="block mb-1 text-sm font-medium">Eşya Adı</label><input type="text" id="itemNameInput" class="w-full bg-gray-700 rounded p-2 border border-gray-600 focus:ring-amber-500 focus:border-amber-500" placeholder="Adept's Mercenary Hood"></div>
-                        <div><label for="quantityInput" class="block mb-1 text-sm font-medium">Miktar</label><input type="number" id="quantityInput" value="1" min="1" class="w-full bg-gray-700 rounded p-2 border border-gray-600 focus:ring-amber-500 focus:border-amber-500"></div>
+                        <div><label for="playerNameInput" class="block mb-1 text-sm font-medium">Oyuncu Adı</label><input type="text" id="playerNameInput" class="w-full bg-stone-900 rounded p-2 border border-stone-700 focus:ring-amber-500 focus:border-amber-500" placeholder="Oyuncu_A"></div>
+                        <div><label for="itemNameInput" class="block mb-1 text-sm font-medium">Eşya Adı</label><input type="text" id="itemNameInput" class="w-full bg-stone-900 rounded p-2 border border-stone-700 focus:ring-amber-500 focus:border-amber-500" placeholder="Adept's Mercenary Hood"></div>
+                        <div><label for="quantityInput" class="block mb-1 text-sm font-medium">Miktar</label><input type="number" id="quantityInput" value="1" min="1" class="w-full bg-stone-900 rounded p-2 border border-stone-700 focus:ring-amber-500 focus:border-amber-500"></div>
                         <button id="addItemBtn" class="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg">Ekle</button>
                         <p id="addDataFeedback" class="text-sm text-green-400 h-5 mt-2"></p>
                     </div>
@@ -371,6 +437,7 @@
             displayKeptTab(comparison);
             displayTrashTab(trashItems);
             displayLootedFromTab(deadPlayers);
+            displayGeminiButton();
             setupManualAdd();
             setupTabs();
             setupExportButtons(comparison);
@@ -381,7 +448,7 @@
             const container = document.getElementById('tab-all-players');
             const playersWithLoot = Object.keys(comparison).filter(p => comparison[p].totalLooted > 0).sort();
             if (playersWithLoot.length === 0) {
-                container.innerHTML = '<div class="text-center text-xl font-semibold text-gray-400 p-8">Karşılaştırılacak veri bulunamadı veya hiç loot toplanmamış.</div>';
+                container.innerHTML = '<div class="glass-panel p-8 text-center text-xl font-semibold text-gray-400">Karşılaştırılacak veri bulunamadı veya hiç loot toplanmamış.</div>';
                 return;
             }
             let html = '';
@@ -423,16 +490,16 @@
                     }).join('');
 
                 html += `
-                    <div class="result-card bg-gray-800 border border-gray-700 rounded-lg p-6 shadow-md">
-                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4">
+                    <div class="result-card glass-panel p-6">
+                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
                              <div class="flex items-center gap-4">
-                                <h2 class="player-name text-2xl font-bold text-white ${data.isDead ? 'text-red-500' : ''}">${player} ${data.isDead ? '(Öldü)' : ''}</h2>
-                                <button class="export-log-btn bg-gray-600 hover:bg-gray-500 text-xs font-bold py-1 px-3 rounded" data-player-name="${player}">Log Çıkar</button>
+                                <h2 class="player-name text-2xl font-bold text-white ${data.isDead ? 'text-red-400' : ''}">${player} ${data.isDead ? '<span class="text-xs font-medium text-red-400">(ÖLDÜ)</span>' : ''}</h2>
+                                <button class="export-log-btn bg-stone-700 hover:bg-stone-600 text-xs font-bold py-1 px-3 rounded-md transition" data-player-name="${player}">Log Çıkar</button>
                             </div>
-                            <div class="text-sm font-medium mt-2 sm:mt-0 flex flex-wrap gap-2">
-                                <span class="bg-cyan-900 text-cyan-300 px-3 py-1 rounded-full">TOPLANAN: ${data.totalLooted}</span>
-                                <span class="bg-red-900 text-red-300 px-3 py-1 rounded-full">TUTULAN: ${data.kept.length}</span>
-                                <span class="bg-green-900 text-green-300 px-3 py-1 rounded-full">YATIRILAN: ${data.deposited.length}</span>
+                            <div class="text-sm font-medium flex flex-wrap gap-2">
+                                <span class="bg-cyan-900/50 text-cyan-300 px-3 py-1 rounded-full">TOPLANAN: ${data.totalLooted}</span>
+                                <span class="bg-red-900/50 text-red-300 px-3 py-1 rounded-full">TUTULAN: ${data.kept.length}</span>
+                                <span class="bg-green-900/50 text-green-300 px-3 py-1 rounded-full">YATIRILAN: ${data.deposited.length}</span>
                             </div>
                         </div>
                         <div class="item-grid">${itemsHtml}</div>
@@ -451,17 +518,17 @@
             const container = document.getElementById('tab-kept');
             const playersWhoKeptItems = Object.entries(comparison).filter(([_, data]) => data.kept.length > 0).sort();
             if (playersWhoKeptItems.length === 0) {
-                container.innerHTML = '<div class="text-center text-xl font-semibold text-gray-400 p-8">Tüm eşyalar bankaya atılmış veya hiç loot toplanmamış.</div>';
+                container.innerHTML = '<div class="glass-panel p-8 text-center text-xl font-semibold text-gray-400">Tüm eşyalar bankaya atılmış veya hiç loot toplanmamış.</div>';
                 return;
             }
             let html = '';
             playersWhoKeptItems.forEach(([player, data]) => {
                 const keptStatus = data.isDead ? 'dead' : 'safe';
                 html += `
-                    <div class="result-card bg-gray-800 border border-gray-700 rounded-lg p-6 shadow-md">
+                    <div class="result-card glass-panel p-6">
                         <div class="flex justify-between items-center mb-4">
-                             <h2 class="player-name text-2xl font-bold text-white ${data.isDead ? 'text-red-500' : ''}">${player} ${data.isDead ? '(Öldü)' : ''}</h2>
-                            <span class="bg-red-900 text-red-300 px-3 py-1 rounded-full text-sm font-medium">TUTULAN: ${data.kept.length}</span>
+                             <h2 class="player-name text-2xl font-bold text-white ${data.isDead ? 'text-red-400' : ''}">${player} ${data.isDead ? '<span class="text-xs font-medium text-red-400">(ÖLDÜ)</span>' : ''}</h2>
+                            <span class="bg-red-900/50 text-red-300 px-3 py-1 rounded-full text-sm font-medium">TUTULAN: ${data.kept.length}</span>
                         </div>
                         <div class="item-grid">${groupItemsToIconGridHtml(data.kept, keptStatus)}</div>
                     </div>`;
@@ -548,9 +615,7 @@
         // --- ARAMA FİLTRESİ ---
         function setupSearchFilter() {
             const searchInput = document.getElementById('searchInput');
-            const searchWrapper = document.getElementById('search-wrapper');
-            searchWrapper.classList.remove('hidden');
-
+            
             searchInput.addEventListener('input', (e) => {
                 const searchTerm = e.target.value.toLowerCase();
                 
@@ -583,7 +648,7 @@
                     tabContents.forEach(content => {
                         content.id === `tab-${tabId}` ? content.classList.remove('hidden') : content.classList.add('hidden');
                     });
-                    // Arama çubuğunu sadece ilgili sekmelerde göster
+                    
                     const searchWrapper = document.getElementById('search-wrapper');
                     if (tabId === 'all-players' || tabId === 'kept') {
                         searchWrapper.style.display = 'block';
@@ -592,6 +657,120 @@
                     }
                 });
             });
+        }
+
+        // --- GEMINI API INTEGRATION ---
+        function displayGeminiButton() {
+            const container = document.getElementById('gemini-summary-section');
+            container.innerHTML = `
+                <div class="text-center">
+                    <button id="gemini-btn" class="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-3 px-8 rounded-lg text-lg transition-all transform hover:scale-105 shadow-lg shadow-purple-900/50">
+                        ✨ Etkinlik Özeti Oluştur
+                    </button>
+                </div>
+                <div id="gemini-result" class="hidden mt-6 glass-panel p-6"></div>
+            `;
+            document.getElementById('gemini-btn').addEventListener('click', handleGeminiSummary);
+        }
+
+        function prepareSummaryData(analysisData) {
+            const { comparison, deadPlayers } = analysisData;
+            const players = Object.keys(comparison).filter(p => comparison[p].totalLooted > 0);
+
+            const topDepositors = players.sort((a, b) => comparison[b].deposited.length - comparison[a].deposited.length)
+                .slice(0, 3)
+                .map(p => `${p} (${comparison[p].deposited.length} eşya)`);
+            
+            const allItems = Object.values(comparison).flatMap(p => [...p.deposited, ...p.kept]);
+            const valuableItems = allItems
+                .map(i => i.name)
+                .filter(name => name.includes("Master's") || name.includes("Grandmaster's") || name.includes("Elder's") || name.includes(".3") || name.includes(".4"))
+                .slice(0, 5); // Limit for brevity
+
+            return `
+                Katılımcı Sayısı: ${players.length}
+                Ölen Oyuncular: ${deadPlayers.size > 0 ? Array.from(deadPlayers).join(', ') : 'Kimse ölmedi, harika iş!'}
+                En Çok Eşya Yatıranlar: ${topDepositors.join(', ')}
+                Düşen Değerli Eşyalardan Bazıları: ${valuableItems.length > 0 ? valuableItems.join(', ') : 'Kayda değer bir şey düşmedi.'}
+            `;
+        }
+        
+        async function handleGeminiSummary() {
+            const button = document.getElementById('gemini-btn');
+            const resultContainer = document.getElementById('gemini-result');
+            
+            button.disabled = true;
+            button.textContent = '🧠 Yapay Zeka Düşünüyor...';
+            resultContainer.classList.add('hidden');
+
+            const dataSummary = prepareSummaryData(currentAnalysisData);
+            // DÜZELTME: Hatalı ters eğik çizgi kaldırıldı.
+            const prompt = `
+                Sen Team Supremacy adlı bir Albion Online guildinin liderisin. Aşağıdaki verileri kullanarak, Discord'da paylaşmak üzere kısa, esprili ve motive edici bir etkinlik özeti yaz.
+                - Ölen oyuncularla nazikçe dalga geçebilirsin.
+                - En çok katkı sağlayanları onurlandır.
+                - Genel olarak pozitif ve eğlenceli bir dil kullan.
+                - Özeti Markdown formatında, başlıklar ve listeler kullanarak düzenle.
+
+                İşte etkinlik verileri:
+                ${dataSummary}
+            `;
+
+            try {
+                let chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
+                const payload = { contents: chatHistory };
+                const apiKey = ""; // Provided by the environment
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+                
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API isteği başarısız: ${response.status}`);
+                }
+
+                const result = await response.json();
+                const summaryText = result.candidates[0].content.parts[0].text;
+                
+                resultContainer.innerHTML = `
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl font-bold text-purple-400">✨ Yapay Zeka Etkinlik Özeti</h3>
+                        <button id="copy-summary-btn" class="bg-stone-700 hover:bg-stone-600 text-xs font-bold py-1 px-3 rounded-md transition">Özeti Kopyala</button>
+                    </div>
+                    <div class="gemini-summary-container"><pre>${summaryText}</pre></div>
+                `;
+                resultContainer.classList.remove('hidden');
+                resultContainer.classList.add('fade-in');
+
+                document.getElementById('copy-summary-btn').addEventListener('click', () => {
+                    const copyButton = document.getElementById('copy-summary-btn');
+                    // execCommand, iframe kısıtlamaları için daha güvenilir bir yöntemdir.
+                    const textArea = document.createElement("textarea");
+                    textArea.value = summaryText;
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    try {
+                        document.execCommand('copy');
+                        copyButton.textContent = 'Kopyalandı!';
+                    } catch (err) {
+                        console.error('Kopyalama başarısız oldu', err);
+                        copyButton.textContent = 'Hata!';
+                    }
+                    document.body.removeChild(textArea);
+                    setTimeout(() => { copyButton.textContent = 'Özeti Kopyala'; }, 2000);
+                });
+
+            } catch (error) {
+                console.error("Gemini API hatası:", error);
+                resultContainer.innerHTML = '<p class="text-red-400">Özet oluşturulurken bir hata oluştu. Lütfen daha sonra tekrar deneyin.</p>';
+                resultContainer.classList.remove('hidden');
+            } finally {
+                button.disabled = false;
+                button.innerHTML = '✨ Etkinlik Özeti Oluştur';
+            }
         }
     </script>
 </body>
