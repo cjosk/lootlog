@@ -14,7 +14,7 @@
         .tab-btn { transition: background-color 0.3s, color 0.3s; }
         .tab-btn.active { background-color: #4f46e5; color: white; }
 
-        /* Yeni Eklenen Stiller */
+        /* Görsel Stiller */
         .item-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
@@ -43,7 +43,7 @@
             color: white;
             text-shadow: 1px 1px 2px black;
         }
-        .item-kept-overlay {
+        .item-overlay {
             position: absolute;
             top: 0;
             left: 0;
@@ -52,14 +52,19 @@
             display: flex;
             align-items: center;
             justify-content: center;
+        }
+        .overlay-dead {
             background-color: rgba(0, 0, 0, 0.5);
         }
-        .item-kept-overlay span {
+        .overlay-dead span {
             font-size: 3rem;
             color: #ef4444; /* red-500 */
             font-weight: bold;
             line-height: 1;
             text-shadow: 1px 1px 3px black;
+        }
+        .overlay-kept-safe {
+             background-color: rgba(107, 114, 128, 0.7); /* gray-500 with opacity */
         }
     </style>
 </head>
@@ -89,7 +94,7 @@
                     <input type="file" id="chestLogFile" class="hidden-input" accept=".txt">
                 </div>
                  <p id="chestLogFileName" class="text-sm text-gray-500 h-5 mb-1"></p>
-                <textarea id="chestLog" rows="12" class="w-full p-4 bg-gray-800 border-2 border-gray-700 rounded-lg text-gray-300 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition" placeholder="Dosya yükleyin veya logları buraya yapıştırın..."></textarea>
+                <textarea id="chestLog" rows="12" class="w-full p-4 bg-gray-800 border-2 border-gray-700 rounded-lg text-gray-300 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition" placeholder="Dosya yükleyin, manuel ekleyin veya yapıştırın..."></textarea>
             </div>
         </div>
 
@@ -108,15 +113,12 @@
                     <button class="tab-btn whitespace-nowrap py-3 px-4 border-b-2 border-transparent font-medium text-sm text-gray-400 hover:text-white" data-tab="kept">Eşyayı Tutmuş Olanlar</button>
                     <button class="tab-btn whitespace-nowrap py-3 px-4 border-b-2 border-transparent font-medium text-sm text-gray-400 hover:text-white" data-tab="trash">Trash Eşyalar</button>
                     <button class="tab-btn whitespace-nowrap py-3 px-4 border-b-2 border-transparent font-medium text-sm text-gray-400 hover:text-white" data-tab="looted-from">Lootlanan Oyuncular</button>
+                    <button class="tab-btn whitespace-nowrap py-3 px-4 border-b-2 border-transparent font-medium text-sm text-gray-400 hover:text-white" data-tab="add-data">Sandık Verisi Ekle</button>
                 </nav>
             </div>
             <!-- Sekme İçerikleri -->
             <div id="results">
-                <div id="tab-all-players" class="tab-content space-y-6"></div>
-                <div id="tab-deposited" class="tab-content hidden bg-gray-800 border border-gray-700 rounded-lg p-6"></div>
-                <div id="tab-kept" class="tab-content hidden space-y-6"></div>
-                <div id="tab-trash" class="tab-content hidden bg-gray-800 border border-gray-700 rounded-lg p-6"></div>
-                <div id="tab-looted-from" class="tab-content hidden bg-gray-800 border border-gray-700 rounded-lg p-6"></div>
+                <!-- İçerik JavaScript ile doldurulacak -->
             </div>
         </div>
     </div>
@@ -159,11 +161,53 @@
             }
         });
 
+        // --- MANUEL VERİ EKLEME ---
+        function setupManualAdd() {
+            const button = document.getElementById('addItemBtn');
+            if (!button) return;
+            button.addEventListener('click', () => {
+                const playerNameInput = document.getElementById('playerNameInput');
+                const itemNameInput = document.getElementById('itemNameInput');
+                const quantityInput = document.getElementById('quantityInput');
+                const feedback = document.getElementById('addDataFeedback');
+
+                const playerName = playerNameInput.value.trim();
+                const itemName = itemNameInput.value.trim();
+                const quantity = parseInt(quantityInput.value, 10);
+
+                if (!playerName || !itemName || isNaN(quantity) || quantity < 1) {
+                    feedback.textContent = 'Lütfen tüm alanları doğru doldurun.';
+                    feedback.classList.remove('text-green-400');
+                    feedback.classList.add('text-red-400');
+                    setTimeout(() => { feedback.textContent = ''; }, 3000);
+                    return;
+                }
+
+                const now = new Date();
+                const dateStr = `${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getDate().toString().padStart(2, '0')}/${now.getFullYear()} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+                const newLogLine = `"${dateStr}" "${playerName}" "${itemName}" "0" "1" "${quantity}"`;
+                
+                const chestLogTextarea = document.getElementById('chestLog');
+                chestLogTextarea.value += (chestLogTextarea.value.trim() ? '\n' : '') + newLogLine;
+
+                feedback.textContent = `${quantity}x ${itemName} eklendi.`;
+                feedback.classList.add('text-green-400');
+                feedback.classList.remove('text-red-400');
+                
+                itemNameInput.value = '';
+                quantityInput.value = '1';
+                itemNameInput.focus();
+
+                setTimeout(() => { feedback.textContent = ''; }, 3000);
+            });
+        }
+
+
         // --- PARSING LOGS ---
         function parseLootLog(logText) {
             const playerItems = {};
             const trashItems = [];
-            const lootedFrom = [];
+            const lootedFrom = new Set(); // Ölen oyuncuları tekil olarak tutar
             if (!logText) return { playerItems, trashItems, lootedFrom };
 
             const lines = logText.trim().split('\n');
@@ -192,7 +236,7 @@
                     trashItems.push({ looter: playerName, count: quantity });
                 }
                 if (lootedFromName) {
-                    lootedFrom.push(lootedFromName);
+                    lootedFrom.add(lootedFromName);
                 }
             }
             return { playerItems, trashItems, lootedFrom };
@@ -216,14 +260,14 @@
 
         // --- ANALYSIS ---
         function analyzeLogs(lootLogText, chestLogText) {
-            const { playerItems: lootedItemsByPlayer, trashItems, lootedFrom } = parseLootLog(lootLogText);
+            const { playerItems: lootedItemsByPlayer, trashItems, lootedFrom: deadPlayers } = parseLootLog(lootLogText);
             const depositedItemsByPlayer = parseChestLog(chestLogText);
             const allPlayers = new Set([...Object.keys(lootedItemsByPlayer), ...Object.keys(depositedItemsByPlayer)]);
             const comparison = {};
 
             allPlayers.forEach(player => {
-                const looted = lootedItemsByPlayer[player] || []; // Array of {id, name}
-                const depositedCopy = [...(depositedItemsByPlayer[player] || [])]; // Array of strings
+                const looted = lootedItemsByPlayer[player] || [];
+                const depositedCopy = [...(depositedItemsByPlayer[player] || [])];
                 const keptItems = [];
                 const depositedForDisplay = [];
 
@@ -240,32 +284,41 @@
                 comparison[player] = {
                     kept: keptItems,
                     deposited: depositedForDisplay,
-                    totalLooted: looted.length
+                    totalLooted: looted.length,
+                    isDead: deadPlayers.has(player) // Oyuncunun ölüp ölmediğini işaretle
                 };
             });
 
-            return { comparison, trashItems, lootedFrom };
+            return { comparison, trashItems, deadPlayers };
         }
         
         // --- DISPLAY RESULTS ---
-        function groupItemsToIconGridHtml(items, isKeptView = false) {
+        function groupItemsToIconGridHtml(items, keptStatus = 'none') {
             if (!items || items.length === 0) return '<p class="text-gray-500 italic col-span-full">-- Yok --</p>';
             
             const itemCounts = items.reduce((acc, item) => {
-                if (!acc[item.id]) {
-                    acc[item.id] = { count: 0, name: item.name };
+                const key = item.id || item.name;
+                if (!acc[key]) {
+                    acc[key] = { count: 0, name: item.name, id: item.id };
                 }
-                acc[item.id].count++;
+                acc[key].count++;
                 return acc;
             }, {});
 
-            return Object.entries(itemCounts)
-                .sort((a, b) => a[1].name.localeCompare(b[1].name))
-                .map(([id, data]) => `
+            let overlayHtml = '';
+            if(keptStatus === 'dead') {
+                overlayHtml = '<div class="item-overlay overlay-dead"><span>🆇</span></div>';
+            } else if (keptStatus === 'safe') {
+                overlayHtml = '<div class="item-overlay overlay-kept-safe"></div>';
+            }
+
+            return Object.values(itemCounts)
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map((data) => `
                     <div class="item-slot" title="${data.count}x ${data.name}">
-                        <img src="https://render.albiononline.com/v1/item/${id}.png" alt="${data.name}" onerror="this.style.display='none'">
+                        <img src="https://render.albiononline.com/v1/item/${data.id}.png" alt="${data.name}" onerror="this.style.display='none'">
                         <span class="item-quantity">${data.count}</span>
-                        ${isKeptView ? '<div class="item-kept-overlay"><span>🆇</span></div>' : ''}
+                        ${overlayHtml}
                     </div>
                 `).join('');
         }
@@ -283,7 +336,7 @@
         }
 
         function displayResults(analysis) {
-            const { comparison, trashItems, lootedFrom } = analysis;
+            const { comparison, trashItems, deadPlayers } = analysis;
             
             const resultsContainer = document.getElementById('results');
             resultsContainer.innerHTML = `
@@ -292,14 +345,24 @@
                 <div id="tab-kept" class="tab-content hidden space-y-6"></div>
                 <div id="tab-trash" class="tab-content hidden bg-gray-800 border border-gray-700 rounded-lg p-6"></div>
                 <div id="tab-looted-from" class="tab-content hidden bg-gray-800 border border-gray-700 rounded-lg p-6"></div>
+                <div id="tab-add-data" class="tab-content hidden bg-gray-800 border border-gray-700 rounded-lg p-6">
+                    <h3 class="text-xl font-semibold text-amber-400 mb-4">Sandığa Manuel Eşya Ekle</h3>
+                    <div class="space-y-4 max-w-md">
+                        <div><label for="playerNameInput" class="block mb-1 text-sm font-medium">Oyuncu Adı</label><input type="text" id="playerNameInput" class="w-full bg-gray-700 rounded p-2 border border-gray-600 focus:ring-amber-500 focus:border-amber-500" placeholder="Oyuncu_A"></div>
+                        <div><label for="itemNameInput" class="block mb-1 text-sm font-medium">Eşya Adı</label><input type="text" id="itemNameInput" class="w-full bg-gray-700 rounded p-2 border border-gray-600 focus:ring-amber-500 focus:border-amber-500" placeholder="Adept's Mercenary Hood"></div>
+                        <div><label for="quantityInput" class="block mb-1 text-sm font-medium">Miktar</label><input type="number" id="quantityInput" value="1" min="1" class="w-full bg-gray-700 rounded p-2 border border-gray-600 focus:ring-amber-500 focus:border-amber-500"></div>
+                        <button id="addItemBtn" class="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg">Ekle</button>
+                        <p id="addDataFeedback" class="text-sm text-green-400 h-5 mt-2"></p>
+                    </div>
+                </div>
             `;
             
             displayAllPlayersTab(comparison);
             displayDepositedTab(comparison);
             displayKeptTab(comparison);
             displayTrashTab(trashItems);
-            displayLootedFromTab(lootedFrom);
-            
+            displayLootedFromTab(deadPlayers);
+            setupManualAdd();
             setupTabs();
         }
 
@@ -314,30 +377,43 @@
             playersWithLoot.forEach(player => {
                 const data = comparison[player];
                 const allLootedItems = [...data.deposited, ...data.kept];
-                const keptItemIds = new Set(data.kept.map(item => item.id));
+                const keptItemNames = new Set(data.kept.map(item => item.name));
 
                 const allLootedGrouped = allLootedItems.reduce((acc, item) => {
-                    if (!acc[item.id]) {
-                        acc[item.id] = { count: 0, name: item.name, isKept: keptItemIds.has(item.id) };
+                    const key = item.id || item.name;
+                    if (!acc[key]) {
+                        const isKept = keptItemNames.has(item.name);
+                        let keptStatus = 'none';
+                        if (isKept) {
+                            keptStatus = data.isDead ? 'dead' : 'safe';
+                        }
+                        acc[key] = { count: 0, name: item.name, id: item.id, keptStatus: keptStatus };
                     }
-                    acc[item.id].count++;
+                    acc[key].count++;
                     return acc;
                 }, {});
 
-                const itemsHtml = Object.entries(allLootedGrouped)
-                    .sort((a, b) => a[1].name.localeCompare(b[1].name))
-                    .map(([id, itemData]) => `
+                const itemsHtml = Object.values(allLootedGrouped)
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .map((itemData) => {
+                        let overlayHtml = '';
+                        if (itemData.keptStatus === 'dead') {
+                            overlayHtml = '<div class="item-overlay overlay-dead"><span>🆇</span></div>';
+                        } else if (itemData.keptStatus === 'safe') {
+                            overlayHtml = '<div class="item-overlay overlay-kept-safe"></div>';
+                        }
+                        return `
                         <div class="item-slot" title="${itemData.count}x ${itemData.name}">
-                            <img src="https://render.albiononline.com/v1/item/${id}.png" alt="${itemData.name}" onerror="this.style.display='none'">
+                            <img src="https://render.albiononline.com/v1/item/${itemData.id}.png" alt="${itemData.name}" onerror="this.style.display='none'">
                             <span class="item-quantity">${itemData.count}</span>
-                            ${itemData.isKept ? '<div class="item-kept-overlay"><span>🆇</span></div>' : ''}
-                        </div>
-                    `).join('');
+                            ${overlayHtml}
+                        </div>`;
+                    }).join('');
 
                 html += `
                     <div class="result-card bg-gray-800 border border-gray-700 rounded-lg p-6 shadow-md">
                         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4">
-                            <h2 class="text-2xl font-bold text-white">${player}</h2>
+                            <h2 class="text-2xl font-bold text-white ${data.isDead ? 'text-red-500' : ''}">${player} ${data.isDead ? '(Öldü)' : ''}</h2>
                             <div class="text-sm font-medium mt-2 sm:mt-0 flex flex-wrap gap-2">
                                 <span class="bg-cyan-900 text-cyan-300 px-3 py-1 rounded-full">TOPLANAN: ${data.totalLooted}</span>
                                 <span class="bg-red-900 text-red-300 px-3 py-1 rounded-full">TUTULAN: ${data.kept.length}</span>
@@ -365,13 +441,14 @@
             }
             let html = '';
             playersWhoKeptItems.forEach(([player, data]) => {
+                const keptStatus = data.isDead ? 'dead' : 'safe';
                 html += `
                     <div class="result-card bg-gray-800 border border-gray-700 rounded-lg p-6 shadow-md">
                         <div class="flex justify-between items-center mb-4">
-                            <h2 class="text-2xl font-bold text-white">${player}</h2>
+                             <h2 class="text-2xl font-bold text-white ${data.isDead ? 'text-red-500' : ''}">${player} ${data.isDead ? '(Öldü)' : ''}</h2>
                             <span class="bg-red-900 text-red-300 px-3 py-1 rounded-full text-sm font-medium">TUTULAN: ${data.kept.length}</span>
                         </div>
-                        <div class="item-grid">${groupItemsToIconGridHtml(data.kept, true)}</div>
+                        <div class="item-grid">${groupItemsToIconGridHtml(data.kept, keptStatus)}</div>
                     </div>`;
             });
             container.innerHTML = html;
@@ -394,10 +471,10 @@
             container.innerHTML = `<h3 class="text-xl font-semibold text-gray-400 mb-4">Toplanan Trash Eşyalar</h3><ul class="space-y-1 pl-2">${html}</ul>`;
         }
 
-        function displayLootedFromTab(lootedFrom) {
+        function displayLootedFromTab(deadPlayers) {
             const container = document.getElementById('tab-looted-from');
-            const uniqueLootedFrom = [...new Set(lootedFrom)]; // Tekrarları kaldır
-            container.innerHTML = `<h3 class="text-xl font-semibold text-orange-400 mb-4">Eşyası Alınan Oyuncular</h3><ul class="space-y-1 pl-2 columns-2 md:columns-3">${groupItemsToTextListHtml(uniqueLootedFrom, 'Kimseden eşya alınmamış.')}</ul>`;
+            const deadPlayersArray = Array.from(deadPlayers);
+            container.innerHTML = `<h3 class="text-xl font-semibold text-orange-400 mb-4">Eşyası Alınan Oyuncular</h3><ul class="space-y-1 pl-2 columns-2 md:columns-3">${groupItemsToTextListHtml(deadPlayersArray, 'Kimseden eşya alınmamış.')}</ul>`;
         }
         
         // --- TAB SWITCHING ---
