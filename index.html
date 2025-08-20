@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Albion Online Loot Karşılaştırma Paneli</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .result-card {
+            transition: all 0.3s ease;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200 min-h-screen p-4 sm:p-8">
+    <div class="max-w-7xl mx-auto">
+        <!-- Başlık Alanı -->
+        <div class="text-center mb-8">
+            <h1 class="text-3xl sm:text-4xl font-bold text-white mb-2">Albion Online Loot Takip Paneli</h1>
+            <p class="text-gray-400">Loot ve Sandık loglarını karşılaştırarak kimin neyi tuttuğunu görün.</p>
+        </div>
+
+        <!-- Log Giriş Alanları -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
+            <div>
+                <label for="lootLog" class="block text-lg font-semibold mb-2 text-cyan-400">Loot Logları (CSV Formatı)</label>
+                <textarea id="lootLog" rows="12" class="w-full p-4 bg-gray-800 border-2 border-gray-700 rounded-lg text-gray-300 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition" placeholder="timestamp_utc;looted_by__alliance;...&#10;2025-08-20T22:02:10.070Z;FD2D;..."></textarea>
+            </div>
+            <div>
+                <label for="chestLog" class="block text-lg font-semibold mb-2 text-amber-400">Guild Sandığı Logları (Sütunlu Format)</label>
+                <textarea id="chestLog" rows="12" class="w-full p-4 bg-gray-800 border-2 border-gray-700 rounded-lg text-gray-300 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition" placeholder="&quot;Date&quot; &quot;Player&quot; &quot;Item&quot;...&#10;&quot;08/20/2025 22:04:26&quot; &quot;KUMBETLii&quot;..."></textarea>
+            </div>
+        </div>
+
+        <!-- Buton -->
+        <div class="text-center mb-8">
+            <button id="compareBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-lg text-lg transition-transform transform hover:scale-105 shadow-lg">
+                Logları Karşılaştır
+            </button>
+        </div>
+
+        <!-- Sonuç Alanı -->
+        <div id="results" class="space-y-6">
+            <!-- Sonuçlar buraya dinamik olarak eklenecek -->
+        </div>
+    </div>
+
+    <script>
+        // Butona tıklama olayını dinle
+        document.getElementById('compareBtn').addEventListener('click', () => {
+            const lootLogText = document.getElementById('lootLog').value;
+            const chestLogText = document.getElementById('chestLog').value;
+            const resultsContainer = document.getElementById('results');
+            resultsContainer.innerHTML = '<div class="text-center text-xl font-semibold text-gray-400">Sonuçlar hesaplanıyor...</div>';
+
+            // Logları işle ve karşılaştır
+            try {
+                const comparison = compareLogs(lootLogText, chestLogText);
+                displayResults(comparison);
+            } catch (error) {
+                console.error("Log işlenirken bir hata oluştu:", error);
+                resultsContainer.innerHTML = `<div class="bg-red-900 border border-red-700 text-red-200 px-4 py-3 rounded-lg text-center">
+                    <strong>Hata!</strong> Log formatı tanınamadı. Lütfen logların doğru olduğundan emin olun. Detaylar için konsolu kontrol edin (F12).
+                </div>`;
+            }
+        });
+
+        /**
+         * Loot logger'dan gelen CSV formatındaki logu ayrıştırır.
+         * @param {string} logText - Ham log metni (noktalı virgülle ayrılmış).
+         * @returns {Object} - Oyuncu adlarını anahtar, eşya listesini değer olarak içeren bir nesne.
+         */
+        function parseLootLog(logText) {
+            const playerItems = {};
+            if (!logText) return playerItems;
+
+            const lines = logText.trim().split('\n');
+            // İlk satır başlık olduğu için 1'den başla
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue; // Boş satırları atla
+
+                const parts = line.split(';');
+                if (parts.length < 7) continue; // Hatalı satırları atla
+
+                const playerName = parts[3].trim();
+                const itemName = parts[5].trim();
+                const quantity = parseInt(parts[6], 10);
+
+                if (!playerName || !itemName || isNaN(quantity)) continue;
+
+                if (!playerItems[playerName]) {
+                    playerItems[playerName] = [];
+                }
+
+                for (let j = 0; j < quantity; j++) {
+                    playerItems[playerName].push(itemName);
+                }
+            }
+            return playerItems;
+        }
+
+        /**
+         * Guild sandığı logundan gelen sütunlu metin formatını ayrıştırır.
+         * @param {string} logText - Ham log metni (tırnak içinde ve boşlukla ayrılmış).
+         * @returns {Object} - Oyuncu adlarını anahtar, eşya listesini değer olarak içeren bir nesne.
+         */
+        function parseChestLog(logText) {
+            const playerItems = {};
+            if (!logText) return playerItems;
+
+            // Eşya isimlerindeki boşlukları doğru şekilde ele almak için Regex kullanılıyor.
+            // Format: "Date" "Player" "Item" "Enchant" "Quality" "Amount"
+            const regex = /"([^"]+)"\s+"([^"]+)"\s+"([^"]+)"\s+"(\d+)"\s+"(\d+)"\s+"(\d+)"/g;
+            
+            let match;
+            while ((match = regex.exec(logText)) !== null) {
+                const playerName = match[2].trim();
+                const itemName = match[3].trim();
+                const quantity = parseInt(match[6], 10);
+                
+                if (!playerName || !itemName || isNaN(quantity)) continue;
+
+                if (!playerItems[playerName]) {
+                    playerItems[playerName] = [];
+                }
+
+                for (let i = 0; i < quantity; i++) {
+                    playerItems[playerName].push(itemName);
+                }
+            }
+            return playerItems;
+        }
+
+        /**
+         * Loot ve sandık loglarını karşılaştırır.
+         * @param {string} lootLogText - Ham loot logu metni.
+         * @param {string} chestLogText - Ham sandık logu metni.
+         * @returns {Object} - Her oyuncu için tutulan ve yatırılan eşyaları içeren bir nesne.
+         */
+        function compareLogs(lootLogText, chestLogText) {
+            const lootedItemsByPlayer = parseLootLog(lootLogText);
+            const depositedItemsByPlayer = parseChestLog(chestLogText);
+
+            const allPlayers = new Set([...Object.keys(lootedItemsByPlayer), ...Object.keys(depositedItemsByPlayer)]);
+            const comparison = {};
+
+            allPlayers.forEach(player => {
+                const looted = lootedItemsByPlayer[player] || [];
+                const depositedCopy = [...(depositedItemsByPlayer[player] || [])];
+                
+                const keptItems = [];
+                const depositedForDisplay = [];
+
+                looted.forEach(item => {
+                    const depositedIndex = depositedCopy.indexOf(item);
+                    if (depositedIndex > -1) {
+                        depositedForDisplay.push(item);
+                        depositedCopy.splice(depositedIndex, 1);
+                    } else {
+                        keptItems.push(item);
+                    }
+                });
+                
+                // Sadece sandığa atılan ama loot logunda olmayan eşyaları da gösterelim.
+                const onlyDeposited = depositedCopy;
+
+                comparison[player] = {
+                    kept: keptItems,
+                    deposited: depositedForDisplay,
+                    onlyDeposited: onlyDeposited, // Bu yeni eklendi
+                    totalLooted: looted.length
+                };
+            });
+
+            return comparison;
+        }
+        
+        /**
+         * Karşılaştırma sonuçlarını gruplayarak HTML olarak gösterir.
+         * @param {Object} itemArray - Gruplanacak eşya listesi.
+         * @returns {string} - HTML <li> listesi.
+         */
+        function groupItemsToHtml(itemArray) {
+            if (itemArray.length === 0) {
+                return '<li class="text-gray-500 italic">-- Yok --</li>';
+            }
+            const itemCounts = itemArray.reduce((acc, item) => {
+                acc[item] = (acc[item] || 0) + 1;
+                return acc;
+            }, {});
+
+            return Object.entries(itemCounts)
+                .sort((a, b) => a[0].localeCompare(b[0])) // Alfabetik sırala
+                .map(([name, count]) => `<li class="text-gray-300"><span class="font-semibold text-white">${count}x</span> ${name}</li>`)
+                .join('');
+        }
+
+        /**
+         * Sonuçları ekranda gösterir.
+         * @param {Object} comparison - Karşılaştırma sonucu.
+         */
+        function displayResults(comparison) {
+            const resultsContainer = document.getElementById('results');
+            resultsContainer.innerHTML = '';
+
+            if (Object.keys(comparison).length === 0) {
+                resultsContainer.innerHTML = '<div class="text-center text-xl font-semibold text-gray-400">Karşılaştırılacak veri bulunamadı. Logları kontrol edin.</div>';
+                return;
+            }
+
+            const sortedPlayers = Object.keys(comparison).sort();
+
+            sortedPlayers.forEach(player => {
+                const data = comparison[player];
+                // Sadece loot toplayan oyuncuları göster
+                if (data.totalLooted === 0) return;
+
+                const totalKept = data.kept.length;
+                const totalDeposited = data.deposited.length;
+
+                const playerCard = `
+                    <div class="result-card bg-gray-800 border border-gray-700 rounded-lg p-6 shadow-md">
+                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4">
+                            <h2 class="text-2xl font-bold text-white">${player}</h2>
+                            <div class="text-sm font-medium mt-2 sm:mt-0">
+                                <span class="bg-cyan-900 text-cyan-300 px-3 py-1 rounded-full">TOPLANAN: ${data.totalLooted}</span>
+                                <span class="bg-red-900 text-red-300 px-3 py-1 rounded-full ml-2">TUTULAN: ${totalKept}</span>
+                                <span class="bg-green-900 text-green-300 px-3 py-1 rounded-full ml-2">YATIRILAN: ${totalDeposited}</span>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div>
+                                <h3 class="text-lg font-semibold text-red-400 mb-2 border-b-2 border-red-500/30 pb-1">Kendi Aldığı Eşyalar (Tutulan)</h3>
+                                <ul class="space-y-1 pl-2">${groupItemsToHtml(data.kept)}</ul>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-green-400 mb-2 border-b-2 border-green-500/30 pb-1">Toplayıp Sandığa Attığı Eşyalar</h3>
+                                <ul class="space-y-1 pl-2">${groupItemsToHtml(data.deposited)}</ul>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                resultsContainer.innerHTML += playerCard;
+            });
+        }
+    </script>
+</body>
+</html>
