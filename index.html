@@ -10,18 +10,56 @@
         body {
             font-family: 'Inter', sans-serif;
         }
-        .result-card, .tab-content {
-            transition: all 0.3s ease;
+        .hidden-input { display: none; }
+        .tab-btn { transition: background-color 0.3s, color 0.3s; }
+        .tab-btn.active { background-color: #4f46e5; color: white; }
+
+        /* Yeni Eklenen Stiller */
+        .item-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
+            gap: 8px;
         }
-        .hidden-input {
-            display: none;
+        .item-slot {
+            position: relative;
+            width: 68px;
+            height: 68px;
+            background-color: #1f2937; /* gray-800 */
+            border: 2px solid #4b5563; /* gray-600 */
+            border-radius: 8px;
+            overflow: hidden;
         }
-        .tab-btn {
-            transition: background-color 0.3s, color 0.3s;
+        .item-slot img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
         }
-        .tab-btn.active {
-            background-color: #4f46e5; /* indigo-600 */
+        .item-quantity {
+            position: absolute;
+            bottom: 2px;
+            right: 4px;
+            font-size: 0.8rem;
+            font-weight: bold;
             color: white;
+            text-shadow: 1px 1px 2px black;
+        }
+        .item-kept-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+        .item-kept-overlay span {
+            font-size: 3rem;
+            color: #ef4444; /* red-500 */
+            font-weight: bold;
+            line-height: 1;
+            text-shadow: 1px 1px 3px black;
         }
     </style>
 </head>
@@ -138,6 +176,7 @@
                 if (parts.length < 10) continue;
 
                 const playerName = parts[3].trim();
+                const itemId = parts[4].trim();
                 const itemName = parts[5].trim();
                 const quantity = parseInt(parts[6], 10);
                 const lootedFromName = parts[9].trim();
@@ -145,7 +184,9 @@
                 if (!playerName || !itemName || isNaN(quantity)) continue;
 
                 if (!playerItems[playerName]) playerItems[playerName] = [];
-                for (let j = 0; j < quantity; j++) playerItems[playerName].push(itemName);
+                for (let j = 0; j < quantity; j++) {
+                    playerItems[playerName].push({ id: itemId, name: itemName });
+                }
                 
                 if (itemName.toLowerCase() === 'trash') {
                     trashItems.push({ looter: playerName, count: quantity });
@@ -181,13 +222,13 @@
             const comparison = {};
 
             allPlayers.forEach(player => {
-                const looted = lootedItemsByPlayer[player] || [];
-                const depositedCopy = [...(depositedItemsByPlayer[player] || [])];
+                const looted = lootedItemsByPlayer[player] || []; // Array of {id, name}
+                const depositedCopy = [...(depositedItemsByPlayer[player] || [])]; // Array of strings
                 const keptItems = [];
                 const depositedForDisplay = [];
 
                 looted.forEach(item => {
-                    const depositedIndex = depositedCopy.indexOf(item);
+                    const depositedIndex = depositedCopy.indexOf(item.name);
                     if (depositedIndex > -1) {
                         depositedForDisplay.push(item);
                         depositedCopy.splice(depositedIndex, 1);
@@ -207,7 +248,29 @@
         }
         
         // --- DISPLAY RESULTS ---
-        function groupItemsToHtml(itemArray, emptyMessage = '-- Yok --') {
+        function groupItemsToIconGridHtml(items, isKeptView = false) {
+            if (!items || items.length === 0) return '<p class="text-gray-500 italic col-span-full">-- Yok --</p>';
+            
+            const itemCounts = items.reduce((acc, item) => {
+                if (!acc[item.id]) {
+                    acc[item.id] = { count: 0, name: item.name };
+                }
+                acc[item.id].count++;
+                return acc;
+            }, {});
+
+            return Object.entries(itemCounts)
+                .sort((a, b) => a[1].name.localeCompare(b[1].name))
+                .map(([id, data]) => `
+                    <div class="item-slot" title="${data.count}x ${data.name}">
+                        <img src="https://render.albiononline.com/v1/item/${id}.png" alt="${data.name}" onerror="this.style.display='none'">
+                        <span class="item-quantity">${data.count}</span>
+                        ${isKeptView ? '<div class="item-kept-overlay"><span>🆇</span></div>' : ''}
+                    </div>
+                `).join('');
+        }
+
+        function groupItemsToTextListHtml(itemArray, emptyMessage = '-- Yok --') {
             if (itemArray.length === 0) return `<li class="text-gray-500 italic">${emptyMessage}</li>`;
             const itemCounts = itemArray.reduce((acc, item) => {
                 acc[item] = (acc[item] || 0) + 1;
@@ -222,7 +285,6 @@
         function displayResults(analysis) {
             const { comparison, trashItems, lootedFrom } = analysis;
             
-            // Clear previous results
             const resultsContainer = document.getElementById('results');
             resultsContainer.innerHTML = `
                 <div id="tab-all-players" class="tab-content space-y-6"></div>
@@ -251,6 +313,27 @@
             let html = '';
             playersWithLoot.forEach(player => {
                 const data = comparison[player];
+                const allLootedItems = [...data.deposited, ...data.kept];
+                const keptItemIds = new Set(data.kept.map(item => item.id));
+
+                const allLootedGrouped = allLootedItems.reduce((acc, item) => {
+                    if (!acc[item.id]) {
+                        acc[item.id] = { count: 0, name: item.name, isKept: keptItemIds.has(item.id) };
+                    }
+                    acc[item.id].count++;
+                    return acc;
+                }, {});
+
+                const itemsHtml = Object.entries(allLootedGrouped)
+                    .sort((a, b) => a[1].name.localeCompare(b[1].name))
+                    .map(([id, itemData]) => `
+                        <div class="item-slot" title="${itemData.count}x ${itemData.name}">
+                            <img src="https://render.albiononline.com/v1/item/${id}.png" alt="${itemData.name}" onerror="this.style.display='none'">
+                            <span class="item-quantity">${itemData.count}</span>
+                            ${itemData.isKept ? '<div class="item-kept-overlay"><span>🆇</span></div>' : ''}
+                        </div>
+                    `).join('');
+
                 html += `
                     <div class="result-card bg-gray-800 border border-gray-700 rounded-lg p-6 shadow-md">
                         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4">
@@ -261,16 +344,7 @@
                                 <span class="bg-green-900 text-green-300 px-3 py-1 rounded-full">YATIRILAN: ${data.deposited.length}</span>
                             </div>
                         </div>
-                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            <div>
-                                <h3 class="text-lg font-semibold text-red-400 mb-2 border-b-2 border-red-500/30 pb-1">Kendi Aldığı Eşyalar (Tutulan)</h3>
-                                <ul class="space-y-1 pl-2">${groupItemsToHtml(data.kept)}</ul>
-                            </div>
-                            <div>
-                                <h3 class="text-lg font-semibold text-green-400 mb-2 border-b-2 border-green-500/30 pb-1">Toplayıp Sandığa Attığı Eşyalar</h3>
-                                <ul class="space-y-1 pl-2">${groupItemsToHtml(data.deposited)}</ul>
-                            </div>
-                        </div>
+                        <div class="item-grid">${itemsHtml}</div>
                     </div>`;
             });
             container.innerHTML = html;
@@ -279,7 +353,7 @@
         function displayDepositedTab(comparison) {
             const container = document.getElementById('tab-deposited');
             const allDeposited = Object.values(comparison).flatMap(data => data.deposited);
-            container.innerHTML = `<h3 class="text-xl font-semibold text-green-400 mb-4">Bankaya Atılan Tüm Eşyalar</h3><ul class="space-y-1 pl-2 columns-2 md:columns-3">${groupItemsToHtml(allDeposited, 'Bankaya eşya atılmamış.')}</ul>`;
+            container.innerHTML = `<h3 class="text-xl font-semibold text-green-400 mb-4">Bankaya Atılan Tüm Eşyalar</h3><div class="item-grid">${groupItemsToIconGridHtml(allDeposited)}</div>`;
         }
 
         function displayKeptTab(comparison) {
@@ -297,7 +371,7 @@
                             <h2 class="text-2xl font-bold text-white">${player}</h2>
                             <span class="bg-red-900 text-red-300 px-3 py-1 rounded-full text-sm font-medium">TUTULAN: ${data.kept.length}</span>
                         </div>
-                        <ul class="space-y-1 pl-2">${groupItemsToHtml(data.kept)}</ul>
+                        <div class="item-grid">${groupItemsToIconGridHtml(data.kept, true)}</div>
                     </div>`;
             });
             container.innerHTML = html;
@@ -322,7 +396,8 @@
 
         function displayLootedFromTab(lootedFrom) {
             const container = document.getElementById('tab-looted-from');
-            container.innerHTML = `<h3 class="text-xl font-semibold text-orange-400 mb-4">Eşyası Alınan Oyuncular</h3><ul class="space-y-1 pl-2 columns-2 md:columns-3">${groupItemsToHtml(lootedFrom, 'Kimseden eşya alınmamış.')}</ul>`;
+            const uniqueLootedFrom = [...new Set(lootedFrom)]; // Tekrarları kaldır
+            container.innerHTML = `<h3 class="text-xl font-semibold text-orange-400 mb-4">Eşyası Alınan Oyuncular</h3><ul class="space-y-1 pl-2 columns-2 md:columns-3">${groupItemsToTextListHtml(uniqueLootedFrom, 'Kimseden eşya alınmamış.')}</ul>`;
         }
         
         // --- TAB SWITCHING ---
@@ -330,7 +405,6 @@
             const tabButtons = document.querySelectorAll('.tab-btn');
             const tabContents = document.querySelectorAll('.tab-content');
             
-            // Set initial state
             tabButtons.forEach(btn => btn.classList.remove('active'));
             document.querySelector('.tab-btn[data-tab="all-players"]').classList.add('active');
             tabContents.forEach(content => content.classList.add('hidden'));
@@ -339,16 +413,10 @@
             tabButtons.forEach(button => {
                 button.addEventListener('click', () => {
                     const tabId = button.dataset.tab;
-
                     tabButtons.forEach(btn => btn.classList.remove('active'));
                     button.classList.add('active');
-
                     tabContents.forEach(content => {
-                        if (content.id === `tab-${tabId}`) {
-                            content.classList.remove('hidden');
-                        } else {
-                            content.classList.add('hidden');
-                        }
+                        content.id === `tab-${tabId}` ? content.classList.remove('hidden') : content.classList.add('hidden');
                     });
                 });
             });
