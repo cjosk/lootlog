@@ -28,6 +28,11 @@
             border: 2px solid #4b5563; /* gray-600 */
             border-radius: 8px;
             overflow: hidden;
+            transition: border-color 0.3s, box-shadow 0.3s;
+        }
+        .item-slot-dead {
+            border-color: #ef4444; /* red-500 */
+            box-shadow: 0 0 8px rgba(239, 68, 68, 0.7);
         }
         .item-slot img {
             width: 100%;
@@ -52,16 +57,6 @@
             display: flex;
             align-items: center;
             justify-content: center;
-        }
-        .overlay-dead {
-            background-color: rgba(0, 0, 0, 0.5);
-        }
-        .overlay-dead span {
-            font-size: 3rem;
-            color: #ef4444; /* red-500 */
-            font-weight: bold;
-            line-height: 1;
-            text-shadow: 1px 1px 3px black;
         }
         .overlay-kept-safe {
              background-color: rgba(107, 114, 128, 0.7); /* gray-500 with opacity */
@@ -102,6 +97,19 @@
         <div class="text-center mb-8">
             <button id="compareBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-lg text-lg transition-transform transform hover:scale-105 shadow-lg">Logları Karşılaştır</button>
         </div>
+        
+        <!-- Arama Çubuğu -->
+        <div id="search-wrapper" class="hidden my-6 max-w-lg mx-auto">
+             <div class="relative">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg class="h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
+                    </svg>
+                </div>
+                <input type="text" id="searchInput" class="w-full p-3 pl-10 bg-gray-800 border-2 border-gray-700 rounded-lg text-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Oyuncu adıyla ara...">
+            </div>
+        </div>
+
 
         <!-- Sonuç Alanı -->
         <div id="results-wrapper" class="hidden">
@@ -306,8 +314,9 @@
             }, {});
 
             let overlayHtml = '';
+            let slotClass = 'item-slot';
             if(keptStatus === 'dead') {
-                overlayHtml = '<div class="item-overlay overlay-dead"><span>🆇</span></div>';
+                slotClass += ' item-slot-dead';
             } else if (keptStatus === 'safe') {
                 overlayHtml = '<div class="item-overlay overlay-kept-safe"></div>';
             }
@@ -315,7 +324,7 @@
             return Object.values(itemCounts)
                 .sort((a, b) => a.name.localeCompare(b.name))
                 .map((data) => `
-                    <div class="item-slot" title="${data.count}x ${data.name}">
+                    <div class="${slotClass}" title="${data.count}x ${data.name}">
                         <img src="https://render.albiononline.com/v1/item/${data.id}.png" alt="${data.name}" onerror="this.style.display='none'">
                         <span class="item-quantity">${data.count}</span>
                         ${overlayHtml}
@@ -364,6 +373,8 @@
             displayLootedFromTab(deadPlayers);
             setupManualAdd();
             setupTabs();
+            setupExportButtons(comparison);
+            setupSearchFilter(); 
         }
 
         function displayAllPlayersTab(comparison) {
@@ -396,14 +407,15 @@
                 const itemsHtml = Object.values(allLootedGrouped)
                     .sort((a, b) => a.name.localeCompare(b.name))
                     .map((itemData) => {
+                        let slotClass = 'item-slot';
                         let overlayHtml = '';
                         if (itemData.keptStatus === 'dead') {
-                            overlayHtml = '<div class="item-overlay overlay-dead"><span>🆇</span></div>';
+                            slotClass += ' item-slot-dead';
                         } else if (itemData.keptStatus === 'safe') {
                             overlayHtml = '<div class="item-overlay overlay-kept-safe"></div>';
                         }
                         return `
-                        <div class="item-slot" title="${itemData.count}x ${itemData.name}">
+                        <div class="${slotClass}" title="${itemData.count}x ${itemData.name}">
                             <img src="https://render.albiononline.com/v1/item/${itemData.id}.png" alt="${itemData.name}" onerror="this.style.display='none'">
                             <span class="item-quantity">${itemData.count}</span>
                             ${overlayHtml}
@@ -413,7 +425,10 @@
                 html += `
                     <div class="result-card bg-gray-800 border border-gray-700 rounded-lg p-6 shadow-md">
                         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4">
-                            <h2 class="text-2xl font-bold text-white ${data.isDead ? 'text-red-500' : ''}">${player} ${data.isDead ? '(Öldü)' : ''}</h2>
+                             <div class="flex items-center gap-4">
+                                <h2 class="player-name text-2xl font-bold text-white ${data.isDead ? 'text-red-500' : ''}">${player} ${data.isDead ? '(Öldü)' : ''}</h2>
+                                <button class="export-log-btn bg-gray-600 hover:bg-gray-500 text-xs font-bold py-1 px-3 rounded" data-player-name="${player}">Log Çıkar</button>
+                            </div>
                             <div class="text-sm font-medium mt-2 sm:mt-0 flex flex-wrap gap-2">
                                 <span class="bg-cyan-900 text-cyan-300 px-3 py-1 rounded-full">TOPLANAN: ${data.totalLooted}</span>
                                 <span class="bg-red-900 text-red-300 px-3 py-1 rounded-full">TUTULAN: ${data.kept.length}</span>
@@ -445,7 +460,7 @@
                 html += `
                     <div class="result-card bg-gray-800 border border-gray-700 rounded-lg p-6 shadow-md">
                         <div class="flex justify-between items-center mb-4">
-                             <h2 class="text-2xl font-bold text-white ${data.isDead ? 'text-red-500' : ''}">${player} ${data.isDead ? '(Öldü)' : ''}</h2>
+                             <h2 class="player-name text-2xl font-bold text-white ${data.isDead ? 'text-red-500' : ''}">${player} ${data.isDead ? '(Öldü)' : ''}</h2>
                             <span class="bg-red-900 text-red-300 px-3 py-1 rounded-full text-sm font-medium">TUTULAN: ${data.kept.length}</span>
                         </div>
                         <div class="item-grid">${groupItemsToIconGridHtml(data.kept, keptStatus)}</div>
@@ -477,6 +492,79 @@
             container.innerHTML = `<h3 class="text-xl font-semibold text-orange-400 mb-4">Eşyası Alınan Oyuncular</h3><ul class="space-y-1 pl-2 columns-2 md:columns-3">${groupItemsToTextListHtml(deadPlayersArray, 'Kimseden eşya alınmamış.')}</ul>`;
         }
         
+        // --- LOG EXPORT ---
+        function generateAndDownloadLog(playerName, playerData) {
+            const { kept, deposited, isDead } = playerData;
+            const date = new Date().toLocaleString('tr-TR');
+
+            const groupItemsForText = (items) => {
+                return items.reduce((acc, item) => {
+                    const name = item.name || item;
+                    acc[name] = (acc[name] || 0) + 1;
+                    return acc;
+                }, {});
+            };
+
+            const formatItemList = (itemList) => {
+                if (itemList.length === 0) return '  -- Yok --\n';
+                const grouped = groupItemsForText(itemList);
+                return Object.entries(grouped)
+                    .sort((a, b) => a[0].localeCompare(b[0]))
+                    .map(([name, count]) => `  ${count}x ${name}`)
+                    .join('\n') + '\n';
+            };
+
+            let logContent = `Oyuncu: ${playerName}\n`;
+            logContent += `Durum: ${isDead ? 'Öldü' : 'Hayatta'}\n`;
+            logContent += `Rapor Tarihi: ${date}\n\n`;
+            logContent += `--- KENDİNE AYIRDIĞI EŞYALAR (${kept.length} adet) ---\n`;
+            logContent += formatItemList(kept);
+            logContent += `\n`;
+            logContent += `--- GUILD SANDIĞINA ATTIĞI EŞYALAR (${deposited.length} adet) ---\n`;
+            logContent += formatItemList(deposited);
+
+            const blob = new Blob([logContent], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${playerName}_loot_raporu.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function setupExportButtons(comparison) {
+            document.querySelectorAll('.export-log-btn').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const playerName = e.target.dataset.playerName;
+                    if (playerName && comparison[playerName]) {
+                        generateAndDownloadLog(playerName, comparison[playerName]);
+                    }
+                });
+            });
+        }
+        
+        // --- ARAMA FİLTRESİ ---
+        function setupSearchFilter() {
+            const searchInput = document.getElementById('searchInput');
+            const searchWrapper = document.getElementById('search-wrapper');
+            searchWrapper.classList.remove('hidden');
+
+            searchInput.addEventListener('input', (e) => {
+                const searchTerm = e.target.value.toLowerCase();
+                
+                document.querySelectorAll('.result-card').forEach(card => {
+                    const playerName = card.querySelector('.player-name').textContent.toLowerCase();
+                    if (playerName.includes(searchTerm)) {
+                        card.style.display = 'block';
+                    } else {
+                        card.style.display = 'none';
+                    }
+                });
+            });
+        }
+
         // --- TAB SWITCHING ---
         function setupTabs() {
             const tabButtons = document.querySelectorAll('.tab-btn');
@@ -495,6 +583,13 @@
                     tabContents.forEach(content => {
                         content.id === `tab-${tabId}` ? content.classList.remove('hidden') : content.classList.add('hidden');
                     });
+                    // Arama çubuğunu sadece ilgili sekmelerde göster
+                    const searchWrapper = document.getElementById('search-wrapper');
+                    if (tabId === 'all-players' || tabId === 'kept') {
+                        searchWrapper.style.display = 'block';
+                    } else {
+                        searchWrapper.style.display = 'none';
+                    }
                 });
             });
         }
