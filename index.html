@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Team Supremacy Loot Takip Paneli</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         body {
@@ -12,7 +14,6 @@
             background-color: #0c0a09; /* stone-950 */
             overflow-x: hidden;
         }
-        /* Fareyi takip eden aydınlatma efekti */
         body::before {
             content: '';
             position: fixed;
@@ -29,7 +30,7 @@
             z-index: -1;
         }
         .glass-panel {
-            background: rgba(28, 25, 23, 0.5); /* stone-900/50 */
+            background: rgba(28, 25, 23, 0.5);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
             border: 1px solid rgba(255, 255, 255, 0.1);
@@ -59,14 +60,14 @@
             position: relative;
             width: 68px;
             height: 68px;
-            background-color: rgba(12, 10, 9, 0.7); /* stone-950/70 */
-            border: 2px solid #44403c; /* stone-700 */
+            background-color: rgba(12, 10, 9, 0.7);
+            border: 2px solid #44403c;
             border-radius: 0.5rem;
             overflow: hidden;
             transition: border-color 0.3s, box-shadow 0.3s;
         }
         .item-slot-dead {
-            border-color: #ef4444; /* red-500 */
+            border-color: #ef4444;
             box-shadow: 0 0 10px rgba(239, 68, 68, 0.6);
         }
         .item-slot img {
@@ -92,7 +93,7 @@
             border-radius: 0.375rem;
         }
         .overlay-kept-safe {
-             background-color: rgba(107, 114, 128, 0.7); /* gray-500 with opacity */
+             background-color: rgba(107, 114, 128, 0.7);
         }
         .fade-in {
             animation: fadeIn 0.5s ease-in-out forwards;
@@ -101,12 +102,18 @@
             from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
         }
-        .gemini-summary-container pre {
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            font-family: 'Inter', sans-serif;
-            font-size: 0.9rem;
-            line-height: 1.6;
+        /* Modal Stilleri */
+        .modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 50;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
     </style>
 </head>
@@ -124,7 +131,6 @@
         <main class="space-y-10">
             <!-- Veri Giriş Alanı -->
             <section class="glass-panel p-6">
-                <h2 class="text-xl font-bold mb-4 text-white">Veri Girişi</h2>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div>
                         <div class="flex justify-between items-center mb-2">
@@ -145,7 +151,6 @@
                         <textarea id="chestLog" rows="10" class="w-full p-3 bg-stone-900 border border-stone-700 rounded-lg text-gray-300 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition" placeholder="Sandık log dosyasını yükleyin veya içeriği buraya yapıştırın..."></textarea>
                     </div>
                 </div>
-                 <!-- Buton -->
                 <div class="text-center mt-6">
                     <button id="compareBtn" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-10 rounded-lg text-lg transition-all transform hover:scale-105 shadow-lg shadow-indigo-900/50">Analizi Başlat</button>
                 </div>
@@ -153,10 +158,9 @@
             
             <!-- Sonuç Alanı -->
             <section id="results-wrapper" class="hidden">
-                <!-- Arama ve Sekmeler -->
+                <div id="api-status-container" class="mb-4"></div>
                 <div class="glass-panel p-4 mb-6">
                     <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
-                        <!-- Arama Çubuğu -->
                         <div id="search-wrapper" class="w-full sm:max-w-xs">
                             <div class="relative">
                                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -165,9 +169,9 @@
                                 <input type="text" id="searchInput" class="w-full p-2 pl-10 bg-stone-900 border border-stone-700 rounded-lg text-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Oyuncu ara...">
                             </div>
                         </div>
-                        <!-- Sekme Butonları -->
                         <nav class="flex flex-wrap justify-center gap-4" aria-label="Tabs">
                             <button class="tab-btn active whitespace-nowrap py-2 px-3 font-medium text-sm text-gray-300 hover:text-white" data-tab="all-players">Tüm Oyuncular</button>
+                            <button class="tab-btn whitespace-nowrap py-2 px-3 font-medium text-sm text-gray-300 hover:text-white" data-tab="value">Loot Değeri</button>
                             <button class="tab-btn whitespace-nowrap py-2 px-3 font-medium text-sm text-gray-300 hover:text-white" data-tab="deposited">Bankaya Atılanlar</button>
                             <button class="tab-btn whitespace-nowrap py-2 px-3 font-medium text-sm text-gray-300 hover:text-white" data-tab="kept">Eşyayı Tutanlar</button>
                             <button class="tab-btn whitespace-nowrap py-2 px-3 font-medium text-sm text-gray-300 hover:text-white" data-tab="trash">Trash</button>
@@ -176,22 +180,29 @@
                         </nav>
                     </div>
                 </div>
-                 <!-- Gemini Özet Alanı -->
-                <div id="gemini-summary-section" class="mb-6"></div>
-                <!-- Sekme İçerikleri -->
-                <div id="results">
-                    <!-- İçerik JavaScript ile doldurulacak -->
-                </div>
+                <div id="results"></div>
             </section>
         </main>
+    </div>
+    
+    <!-- Ölüm Detayları Modalı -->
+    <div id="death-modal" class="modal-backdrop hidden fade-in">
+        <div class="glass-panel p-6 w-full max-w-2xl m-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 id="modal-title" class="text-xl font-bold text-white">Ölüm Raporu</h3>
+                <button id="close-modal-btn" class="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+            </div>
+            <div id="modal-content" class="text-gray-300 max-h-[70vh] overflow-y-auto"></div>
+        </div>
     </div>
 
     <script>
         // --- GLOBAL STATE ---
         let currentAnalysisData = {};
+        let guildMembers = new Map();
+        let valueChart = null;
 
         // --- SETUP ---
-        // Arka plan aydınlatma efekti
         document.addEventListener('mousemove', e => {
             document.body.style.setProperty('--mouse-x', `${e.clientX}px`);
             document.body.style.setProperty('--mouse-y', `${e.clientY}px`);
@@ -216,15 +227,27 @@
         setupFileInput('lootLogFile', 'lootLog', 'lootLogFileName');
         setupFileInput('chestLogFile', 'chestLog', 'chestLogFileName');
 
-        document.getElementById('compareBtn').addEventListener('click', () => {
-            const lootLogText = document.getElementById('lootLog').value;
-            const chestLogText = document.getElementById('chestLog').value;
+        document.getElementById('compareBtn').addEventListener('click', async () => {
             const resultsWrapper = document.getElementById('results-wrapper');
             const resultsContainer = document.getElementById('results');
+            const apiStatusContainer = document.getElementById('api-status-container');
+            
             resultsContainer.innerHTML = '<div class="text-center text-xl font-semibold text-gray-400 p-8">Sonuçlar hesaplanıyor...</div>';
-            document.getElementById('gemini-summary-section').innerHTML = ''; // Clear previous summary
+            apiStatusContainer.innerHTML = ''; // Clear previous status
             resultsWrapper.classList.remove('hidden');
             resultsWrapper.classList.add('fade-in');
+            
+            if (guildMembers.size === 0) {
+                const statusDiv = document.createElement('div');
+                statusDiv.className = 'text-center text-sm text-gray-500 p-2';
+                statusDiv.id = 'api-status';
+                statusDiv.textContent = 'Guild üyeleri alınıyor...';
+                apiStatusContainer.appendChild(statusDiv);
+                await fetchGuildMembers('MsXlz1fUQFySJSqG4HiGbA');
+            }
+
+            const lootLogText = document.getElementById('lootLog').value;
+            const chestLogText = document.getElementById('chestLog').value;
             
             try {
                 currentAnalysisData = analyzeLogs(lootLogText, chestLogText);
@@ -243,69 +266,158 @@
                 const playerNameInput = document.getElementById('playerNameInput');
                 const itemNameInput = document.getElementById('itemNameInput');
                 const quantityInput = document.getElementById('quantityInput');
+                const bulkInput = document.getElementById('bulkDataInput');
                 const feedback = document.getElementById('addDataFeedback');
+                let addedCount = 0;
 
                 const playerName = playerNameInput.value.trim();
                 const itemName = itemNameInput.value.trim();
                 const quantity = parseInt(quantityInput.value, 10);
 
-                if (!playerName || !itemName || isNaN(quantity) || quantity < 1) {
-                    feedback.textContent = 'Lütfen tüm alanları doğru doldurun.';
+                if (playerName && itemName && !isNaN(quantity) && quantity > 0) {
+                     const newLogLine = `"${getFormattedDate()}" "${playerName}" "${itemName}" "0" "1" "${quantity}"`;
+                     appendToChestLog(newLogLine);
+                     addedCount++;
+                }
+
+                const bulkText = bulkInput.value.trim();
+                if (bulkText) {
+                    const lines = bulkText.split('\n');
+                    lines.forEach(line => {
+                        if(line.trim()){
+                            appendToChestLog(line.trim());
+                            addedCount++;
+                        }
+                    });
+                }
+
+                if (addedCount > 0) {
+                    feedback.textContent = `${addedCount} kayıt eklendi.`;
+                    feedback.classList.add('text-green-400');
+                    feedback.classList.remove('text-red-400');
+                    playerNameInput.value = '';
+                    itemNameInput.value = '';
+                    quantityInput.value = '1';
+                    bulkInput.value = '';
+                    playerNameInput.focus();
+                    setTimeout(() => { feedback.textContent = ''; }, 3000);
+                } else {
+                    feedback.textContent = 'Eklenecek geçerli veri bulunamadı.';
                     feedback.classList.remove('text-green-400');
                     feedback.classList.add('text-red-400');
                     setTimeout(() => { feedback.textContent = ''; }, 3000);
-                    return;
                 }
-
-                const now = new Date();
-                const dateStr = `${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getDate().toString().padStart(2, '0')}/${now.getFullYear()} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
-                const newLogLine = `"${dateStr}" "${playerName}" "${itemName}" "0" "1" "${quantity}"`;
-                
-                const chestLogTextarea = document.getElementById('chestLog');
-                chestLogTextarea.value += (chestLogTextarea.value.trim() ? '\n' : '') + newLogLine;
-
-                feedback.textContent = `${quantity}x ${itemName} eklendi.`;
-                feedback.classList.add('text-green-400');
-                feedback.classList.remove('text-red-400');
-                
-                itemNameInput.value = '';
-                quantityInput.value = '1';
-                itemNameInput.focus();
-
-                setTimeout(() => { feedback.textContent = ''; }, 3000);
             });
+            setupFileInput('addDataFile', 'bulkDataInput', 'addDataFileName');
+        }
+        
+        function getFormattedDate() {
+            const now = new Date();
+            return `${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getDate().toString().padStart(2, '0')}/${now.getFullYear()} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
         }
 
+        function appendToChestLog(line) {
+            const chestLogTextarea = document.getElementById('chestLog');
+            chestLogTextarea.value += (chestLogTextarea.value.trim() ? '\n' : '') + line;
+        }
 
-        // --- PARSING LOGS ---
+        // --- ALBION API ---
+        async function fetchWithProxy(apiUrl) {
+            const proxyUrl = 'https://proxy.cors.sh/';
+            const apiKey = 'temp_75f4ca1c86d5114f55123bd11347c0cf';
+            
+            const response = await fetch(proxyUrl + apiUrl, {
+                headers: {
+                    'x-cors-api-key': apiKey
+                }
+            });
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`API isteği başarısız: ${response.status} - ${errorText}`);
+            }
+            return response.json();
+        }
+
+        async function fetchGuildMembers(guildId) {
+            const apiUrl = `https://gameinfo-ams.albiononline.com/api/gameinfo/guilds/${guildId}/members`;
+            const statusDiv = document.getElementById('api-status');
+            try {
+                const members = await fetchWithProxy(apiUrl);
+                members.forEach(member => {
+                    guildMembers.set(member.Name, member.Id);
+                });
+                if (statusDiv) {
+                    statusDiv.textContent = `✅ ${guildMembers.size} guild üyesi başarıyla yüklendi.`;
+                    statusDiv.className = 'text-center text-sm text-green-500 p-2';
+                }
+            } catch (error) {
+                console.error("Guild API Hatası:", error);
+                 if (statusDiv) {
+                    statusDiv.textContent = '⚠️ Guild üyeleri alınamadı. "Son Ölümü Kontrol Et" özelliği çalışmayacak.';
+                    statusDiv.className = 'text-center text-sm text-yellow-500 p-2';
+                }
+            }
+        }
+
+        async function fetchLastDeath(playerId) {
+            const apiUrl = `https://gameinfo-ams.albiononline.com/api/gameinfo/players/${playerId}/deaths`;
+            try {
+                const deaths = await fetchWithProxy(apiUrl);
+                return deaths.length > 0 ? deaths[0] : null;
+            } catch (error) {
+                console.error("Death API Hatası:", error);
+                return null;
+            }
+        }
+
+        async function fetchItemPrices(itemIds) {
+            if (itemIds.length === 0) return {};
+            const apiUrl = `https://europe.albion-online-data.com/api/v2/stats/prices/${itemIds.join(',')}?locations=Caerleon,Brecilien,Fort%20Sterling,Lymhurst,Martlock,Thetford,Bridgewatch`;
+            try {
+                const priceData = await fetch(apiUrl);
+                if (!priceData.ok) throw new Error('Fiyatlar alınamadı.');
+                const prices = await priceData.json();
+                const priceMap = {};
+                prices.forEach(item => {
+                    if (item.sell_price_min > 0) {
+                        priceMap[item.item_id] = item.sell_price_min;
+                    }
+                });
+                return priceMap;
+            } catch (error) {
+                console.error("Fiyat API Hatası:", error);
+                return {};
+            }
+        }
+
+        // --- PARSING & ANALYSIS ---
         function parseLootLog(logText) {
             const playerItems = {};
             const trashItems = [];
-            const lootedFrom = new Set(); // Ölen oyuncuları tekil olarak tutar
-            if (!logText) return { playerItems, trashItems, lootedFrom };
-
+            const lootedFrom = new Set();
+            const lootEvents = [];
+            if (!logText) return { playerItems, trashItems, lootedFrom, lootEvents };
             const lines = logText.trim().split('\n');
             const startIndex = lines[0] && lines[0].startsWith('timestamp_utc') ? 1 : 0;
-            
             for (let i = startIndex; i < lines.length; i++) {
                 const line = lines[i].trim();
                 if (!line) continue;
                 const parts = line.split(';');
                 if (parts.length < 10) continue;
-
+                const timestamp = parts[0].trim();
                 const playerName = parts[3].trim();
                 const itemId = parts[4].trim();
                 const itemName = parts[5].trim();
                 const quantity = parseInt(parts[6], 10);
                 const lootedFromName = parts[9].trim();
-
                 if (!playerName || !itemName || isNaN(quantity)) continue;
-
                 if (!playerItems[playerName]) playerItems[playerName] = [];
                 for (let j = 0; j < quantity; j++) {
-                    playerItems[playerName].push({ id: itemId, name: itemName });
+                    const item = { id: itemId, name: itemName, timestamp: timestamp };
+                    playerItems[playerName].push(item);
+                    lootEvents.push(item);
                 }
-                
                 if (itemName.toLowerCase() === 'trash') {
                     trashItems.push({ looter: playerName, count: quantity });
                 }
@@ -313,9 +425,8 @@
                     lootedFrom.add(lootedFromName);
                 }
             }
-            return { playerItems, trashItems, lootedFrom };
+            return { playerItems, trashItems, lootedFrom, lootEvents };
         }
-
         function parseChestLog(logText) {
             const playerItems = {};
             if (!logText) return playerItems;
@@ -331,20 +442,16 @@
             }
             return playerItems;
         }
-
-        // --- ANALYSIS ---
         function analyzeLogs(lootLogText, chestLogText) {
-            const { playerItems: lootedItemsByPlayer, trashItems, lootedFrom: deadPlayers } = parseLootLog(lootLogText);
+            const { playerItems: lootedItemsByPlayer, trashItems, lootedFrom: deadPlayers, lootEvents } = parseLootLog(lootLogText);
             const depositedItemsByPlayer = parseChestLog(chestLogText);
             const allPlayers = new Set([...Object.keys(lootedItemsByPlayer), ...Object.keys(depositedItemsByPlayer)]);
             const comparison = {};
-
             allPlayers.forEach(player => {
                 const looted = lootedItemsByPlayer[player] || [];
                 const depositedCopy = [...(depositedItemsByPlayer[player] || [])];
                 const keptItems = [];
                 const depositedForDisplay = [];
-
                 looted.forEach(item => {
                     const depositedIndex = depositedCopy.indexOf(item.name);
                     if (depositedIndex > -1) {
@@ -354,30 +461,32 @@
                         keptItems.push(item);
                     }
                 });
-                
                 comparison[player] = {
                     kept: keptItems,
                     deposited: depositedForDisplay,
                     totalLooted: looted.length,
-                    isDead: deadPlayers.has(player) // Oyuncunun ölüp ölmediğini işaretle
+                    isDead: deadPlayers.has(player)
                 };
             });
-
-            return { comparison, trashItems, deadPlayers };
+            return { comparison, trashItems, deadPlayers, lootEvents };
         }
         
         // --- DISPLAY RESULTS ---
         function groupItemsToIconGridHtml(items, keptStatus = 'none') {
             if (!items || items.length === 0) return '<p class="text-gray-500 italic col-span-full">-- Yok --</p>';
             
-            const itemCounts = items.reduce((acc, item) => {
-                const key = item.id || item.name;
-                if (!acc[key]) {
-                    acc[key] = { count: 0, name: item.name, id: item.id };
+            const itemCounts = {};
+            for (const item of items) {
+                const isApiItem = item.Type !== undefined;
+                const key = isApiItem ? item.Type : item.id;
+                const name = isApiItem ? '' : item.name;
+                const count = isApiItem ? item.Count : 1;
+
+                if (!itemCounts[key]) {
+                    itemCounts[key] = { count: 0, name: name, id: key };
                 }
-                acc[key].count++;
-                return acc;
-            }, {});
+                itemCounts[key].count += count;
+            }
 
             let overlayHtml = '';
             let slotClass = 'item-slot';
@@ -390,9 +499,9 @@
             return Object.values(itemCounts)
                 .sort((a, b) => a.name.localeCompare(b.name))
                 .map((data) => `
-                    <div class="${slotClass}" title="${data.count}x ${data.name}">
-                        <img src="https://render.albiononline.com/v1/item/${data.id}.png" alt="${data.name}" onerror="this.style.display='none'">
-                        <span class="item-quantity">${data.count}</span>
+                    <div class="${slotClass}" title="${data.count}x ${data.name || data.id}">
+                        <img src="https://render.albiononline.com/v1/item/${data.id}.png" alt="${data.name}" onerror="this.onerror=null;this.src='https://placehold.co/68x68/1f2937/44403c?text=?';">
+                        <span class="item-quantity">${data.count > 1 ? data.count : ''}</span>
                         ${overlayHtml}
                     </div>
                 `).join('');
@@ -406,44 +515,55 @@
             }, {});
             return Object.entries(itemCounts)
                 .sort((a, b) => a[0].localeCompare(b[0]))
-                .map(([name, count]) => `<li class="text-gray-300"><span class="font-semibold text-white">${count}x</span> ${name}</li>`)
+                .map(([name, count]) => `<li class="text-gray-300"><span class="font-semibold text-white">${count > 1 ? count + 'x' : ''}</span> ${name}</li>`)
                 .join('');
         }
 
-        function displayResults(analysis) {
-            const { comparison, trashItems, deadPlayers } = analysis;
-            
+        async function displayResults(analysis) {
+            const { comparison, trashItems, deadPlayers, lootEvents } = analysis;
             const resultsContainer = document.getElementById('results');
             resultsContainer.innerHTML = `
                 <div id="tab-all-players" class="tab-content space-y-6"></div>
+                <div id="tab-value" class="tab-content hidden glass-panel p-6"></div>
                 <div id="tab-deposited" class="tab-content hidden glass-panel p-6"></div>
                 <div id="tab-kept" class="tab-content hidden space-y-6"></div>
                 <div id="tab-trash" class="tab-content hidden glass-panel p-6"></div>
                 <div id="tab-looted-from" class="tab-content hidden glass-panel p-6"></div>
                 <div id="tab-add-data" class="tab-content hidden glass-panel p-6">
-                    <h3 class="text-xl font-semibold text-amber-400 mb-4">Sandığa Manuel Eşya Ekle</h3>
-                    <div class="space-y-4 max-w-md">
-                        <div><label for="playerNameInput" class="block mb-1 text-sm font-medium">Oyuncu Adı</label><input type="text" id="playerNameInput" class="w-full bg-stone-900 rounded p-2 border border-stone-700 focus:ring-amber-500 focus:border-amber-500" placeholder="Oyuncu_A"></div>
-                        <div><label for="itemNameInput" class="block mb-1 text-sm font-medium">Eşya Adı</label><input type="text" id="itemNameInput" class="w-full bg-stone-900 rounded p-2 border border-stone-700 focus:ring-amber-500 focus:border-amber-500" placeholder="Adept's Mercenary Hood"></div>
-                        <div><label for="quantityInput" class="block mb-1 text-sm font-medium">Miktar</label><input type="number" id="quantityInput" value="1" min="1" class="w-full bg-stone-900 rounded p-2 border border-stone-700 focus:ring-amber-500 focus:border-amber-500"></div>
+                    <h3 class="text-xl font-semibold text-amber-400 mb-4">Sandığa Manuel Veri Ekle</h3>
+                    <div class="space-y-4 max-w-lg">
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div><label for="playerNameInput" class="block mb-1 text-sm font-medium">Oyuncu Adı</label><input type="text" id="playerNameInput" class="w-full bg-stone-900 rounded p-2 border border-stone-700 focus:ring-amber-500 focus:border-amber-500" placeholder="Oyuncu_A"></div>
+                            <div><label for="itemNameInput" class="block mb-1 text-sm font-medium">Eşya Adı</label><input type="text" id="itemNameInput" class="w-full bg-stone-900 rounded p-2 border border-stone-700 focus:ring-amber-500 focus:border-amber-500" placeholder="Adept's Hood"></div>
+                            <div><label for="quantityInput" class="block mb-1 text-sm font-medium">Miktar</label><input type="number" id="quantityInput" value="1" min="1" class="w-full bg-stone-900 rounded p-2 border border-stone-700 focus:ring-amber-500 focus:border-amber-500"></div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between items-center mb-2">
+                                <label for="bulkDataInput" class="block text-sm font-medium">Veya Çoklu Veri Yapıştır / Yükle</label>
+                                <label for="addDataFile" class="bg-stone-600 hover:bg-stone-700 text-white font-bold py-1 px-3 rounded-lg cursor-pointer transition text-xs">Dosya Yükle</label>
+                                <input type="file" id="addDataFile" class="hidden-input" accept=".txt">
+                            </div>
+                            <p id="addDataFileName" class="text-sm text-gray-500 h-5 mb-1"></p>
+                            <textarea id="bulkDataInput" rows="5" class="w-full bg-stone-900 rounded p-2 border border-stone-700 focus:ring-amber-500 focus:border-amber-500" placeholder='"08/21/2025 02:22:00" "Oyuncu_B" "Expert\\'s Axe" "0" "1" "1"'></textarea>
+                        </div>
                         <button id="addItemBtn" class="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg">Ekle</button>
                         <p id="addDataFeedback" class="text-sm text-green-400 h-5 mt-2"></p>
                     </div>
                 </div>
             `;
-            
             displayAllPlayersTab(comparison);
             displayDepositedTab(comparison);
             displayKeptTab(comparison);
             displayTrashTab(trashItems);
             displayLootedFromTab(deadPlayers);
-            displayGeminiButton();
+            await displayValueTab(lootEvents); // Fiyatları çekeceği için async
             setupManualAdd();
             setupTabs();
             setupExportButtons(comparison);
-            setupSearchFilter(); 
+            setupSearchFilter();
+            setupDeathCheckButtons();
+            setupModal();
         }
-
         function displayAllPlayersTab(comparison) {
             const container = document.getElementById('tab-all-players');
             const playersWithLoot = Object.keys(comparison).filter(p => comparison[p].totalLooted > 0).sort();
@@ -454,9 +574,10 @@
             let html = '';
             playersWithLoot.forEach(player => {
                 const data = comparison[player];
+                const playerId = guildMembers.get(player);
+                const deathCheckButtonHtml = playerId ? `<button class="death-check-btn bg-red-800 hover:bg-red-700 text-xs font-bold py-1 px-3 rounded-md transition" data-player-id="${playerId}" data-player-name="${player}">Son Ölümü Kontrol Et</button>` : '';
                 const allLootedItems = [...data.deposited, ...data.kept];
                 const keptItemNames = new Set(data.kept.map(item => item.name));
-
                 const allLootedGrouped = allLootedItems.reduce((acc, item) => {
                     const key = item.id || item.name;
                     if (!acc[key]) {
@@ -470,7 +591,6 @@
                     acc[key].count++;
                     return acc;
                 }, {});
-
                 const itemsHtml = Object.values(allLootedGrouped)
                     .sort((a, b) => a.name.localeCompare(b.name))
                     .map((itemData) => {
@@ -483,8 +603,8 @@
                         }
                         return `
                         <div class="${slotClass}" title="${itemData.count}x ${itemData.name}">
-                            <img src="https://render.albiononline.com/v1/item/${itemData.id}.png" alt="${itemData.name}" onerror="this.style.display='none'">
-                            <span class="item-quantity">${itemData.count}</span>
+                            <img src="https://render.albiononline.com/v1/item/${itemData.id}.png" alt="${itemData.name}" onerror="this.onerror=null;this.src='https://placehold.co/68x68/1f2937/44403c?text=?';">
+                            <span class="item-quantity">${itemData.count > 1 ? itemData.count : ''}</span>
                             ${overlayHtml}
                         </div>`;
                     }).join('');
@@ -492,9 +612,10 @@
                 html += `
                     <div class="result-card glass-panel p-6">
                         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
-                             <div class="flex items-center gap-4">
+                             <div class="flex items-center gap-4 flex-wrap">
                                 <h2 class="player-name text-2xl font-bold text-white ${data.isDead ? 'text-red-400' : ''}">${player} ${data.isDead ? '<span class="text-xs font-medium text-red-400">(ÖLDÜ)</span>' : ''}</h2>
                                 <button class="export-log-btn bg-stone-700 hover:bg-stone-600 text-xs font-bold py-1 px-3 rounded-md transition" data-player-name="${player}">Log Çıkar</button>
+                                ${deathCheckButtonHtml}
                             </div>
                             <div class="text-sm font-medium flex flex-wrap gap-2">
                                 <span class="bg-cyan-900/50 text-cyan-300 px-3 py-1 rounded-full">TOPLANAN: ${data.totalLooted}</span>
@@ -507,13 +628,11 @@
             });
             container.innerHTML = html;
         }
-
         function displayDepositedTab(comparison) {
             const container = document.getElementById('tab-deposited');
             const allDeposited = Object.values(comparison).flatMap(data => data.deposited);
             container.innerHTML = `<h3 class="text-xl font-semibold text-green-400 mb-4">Bankaya Atılan Tüm Eşyalar</h3><div class="item-grid">${groupItemsToIconGridHtml(allDeposited)}</div>`;
         }
-
         function displayKeptTab(comparison) {
             const container = document.getElementById('tab-kept');
             const playersWhoKeptItems = Object.entries(comparison).filter(([_, data]) => data.kept.length > 0).sort();
@@ -535,7 +654,6 @@
             });
             container.innerHTML = html;
         }
-
         function displayTrashTab(trashItems) {
             const container = document.getElementById('tab-trash');
             if (trashItems.length === 0) {
@@ -552,44 +670,163 @@
                 .join('');
             container.innerHTML = `<h3 class="text-xl font-semibold text-gray-400 mb-4">Toplanan Trash Eşyalar</h3><ul class="space-y-1 pl-2">${html}</ul>`;
         }
-
         function displayLootedFromTab(deadPlayers) {
             const container = document.getElementById('tab-looted-from');
             const deadPlayersArray = Array.from(deadPlayers);
             container.innerHTML = `<h3 class="text-xl font-semibold text-orange-400 mb-4">Eşyası Alınan Oyuncular</h3><ul class="space-y-1 pl-2 columns-2 md:columns-3">${groupItemsToTextListHtml(deadPlayersArray, 'Kimseden eşya alınmamış.')}</ul>`;
         }
+
+        async function displayValueTab(lootEvents) {
+            const container = document.getElementById('tab-value');
+            container.innerHTML = '<p class="text-center text-gray-400">Eşya fiyatları Albion Data Project üzerinden alınıyor...</p>';
+            
+            const uniqueItemIds = [...new Set(lootEvents.map(e => e.id))];
+            const priceMap = await fetchItemPrices(uniqueItemIds);
+
+            if (Object.keys(priceMap).length === 0) {
+                container.innerHTML = '<p class="text-center text-red-400">Eşya fiyatları alınamadı. Lütfen daha sonra tekrar deneyin.</p>';
+                return;
+            }
+
+            let cumulativeValue = 0;
+            const chartData = [];
+            lootEvents.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+            for (const event of lootEvents) {
+                cumulativeValue += priceMap[event.id] || 0;
+                chartData.push({
+                    x: new Date(event.timestamp),
+                    y: cumulativeValue
+                });
+            }
+
+            container.innerHTML = `
+                <div class="text-center mb-6">
+                    <h3 class="text-lg font-medium text-gray-400">Toplam Ganimet Değeri</h3>
+                    <p class="text-4xl font-bold text-white">${cumulativeValue.toLocaleString('tr-TR')} <span class="text-2xl text-gray-500">Silver</span></p>
+                </div>
+                <canvas id="valueChart"></canvas>
+            `;
+
+            const ctx = document.getElementById('valueChart').getContext('2d');
+            if (valueChart) {
+                valueChart.destroy();
+            }
+            valueChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: [{
+                        label: 'Toplam Ganimet Değeri',
+                        data: chartData,
+                        borderColor: '#818cf8',
+                        backgroundColor: 'rgba(129, 140, 248, 0.2)',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                unit: 'minute',
+                                tooltipFormat: 'HH:mm:ss',
+                                displayFormats: {
+                                    minute: 'HH:mm'
+                                }
+                            },
+                            ticks: { color: '#a8a29e' }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            ticks: { 
+                                color: '#a8a29e',
+                                callback: function(value) {
+                                    if (value >= 1000000) return (value / 1000000) + 'm';
+                                    if (value >= 1000) return (value / 1000) + 'k';
+                                    return value;
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        }
         
-        // --- LOG EXPORT ---
+        // --- MODAL & DEATH CHECK ---
+        function setupModal() {
+            const modal = document.getElementById('death-modal');
+            const closeBtn = document.getElementById('close-modal-btn');
+            closeBtn.onclick = () => modal.classList.add('hidden');
+            window.onclick = (event) => {
+                if (event.target == modal) {
+                    modal.classList.add('hidden');
+                }
+            }
+        }
+        function setupDeathCheckButtons() {
+            document.querySelectorAll('.death-check-btn').forEach(button => {
+                button.addEventListener('click', async (e) => {
+                    const btn = e.target;
+                    const originalText = btn.textContent;
+                    btn.textContent = 'Kontrol ediliyor...';
+                    btn.disabled = true;
+
+                    const playerId = btn.dataset.playerId;
+                    const playerName = btn.dataset.playerName;
+                    const deathData = await fetchLastDeath(playerId);
+                    
+                    const modal = document.getElementById('death-modal');
+                    const modalTitle = document.getElementById('modal-title');
+                    const modalContent = document.getElementById('modal-content');
+                    
+                    modalTitle.textContent = `${playerName} - Son Ölüm Raporu`;
+                    if (deathData) {
+                        const deathDate = new Date(deathData.TimeStamp).toLocaleString('tr-TR');
+                        const killer = deathData.Killer;
+                        const inventory = Array.isArray(deathData.Inventory) ? deathData.Inventory.filter(i => i) : [];
+
+                        let inventoryHtml = inventory.length > 0 ? groupItemsToIconGridHtml(inventory) : '<p>Envanter boş veya gizli.</p>';
+                        
+                        modalContent.innerHTML = `
+                            <p><strong class="text-gray-400">Tarih:</strong> ${deathDate}</p>
+                            <p><strong class="text-gray-400">Katil:</strong> <span class="text-white font-semibold">${killer.Name}</span></p>
+                            <p><strong class="text-gray-400">Katilin Guild'i:</strong> ${killer.GuildName}</p>
+                            <p><strong class="text-gray-400">IP:</strong> ${killer.AverageItemPower.toFixed(0)}</p>
+                            <hr class="my-4 border-stone-600">
+                            <h4 class="font-bold text-lg mb-2 text-white">Düşen Eşyalar</h4>
+                            <div class="item-grid">${inventoryHtml}</div>
+                        `;
+                    } else {
+                        modalContent.innerHTML = '<p>Bu oyuncu için yakın zamanda bir ölüm kaydı bulunamadı.</p>';
+                    }
+                    modal.classList.remove('hidden');
+                    btn.textContent = originalText;
+                    btn.disabled = false;
+                });
+            });
+        }
+
+        // --- LOG EXPORT, SEARCH, TABS ---
         function generateAndDownloadLog(playerName, playerData) {
             const { kept, deposited, isDead } = playerData;
             const date = new Date().toLocaleString('tr-TR');
-
-            const groupItemsForText = (items) => {
-                return items.reduce((acc, item) => {
-                    const name = item.name || item;
-                    acc[name] = (acc[name] || 0) + 1;
-                    return acc;
-                }, {});
-            };
-
+            const groupItemsForText = (items) => items.reduce((acc, item) => {
+                const name = item.name || item;
+                acc[name] = (acc[name] || 0) + 1;
+                return acc;
+            }, {});
             const formatItemList = (itemList) => {
                 if (itemList.length === 0) return '  -- Yok --\n';
                 const grouped = groupItemsForText(itemList);
-                return Object.entries(grouped)
-                    .sort((a, b) => a[0].localeCompare(b[0]))
-                    .map(([name, count]) => `  ${count}x ${name}`)
-                    .join('\n') + '\n';
+                return Object.entries(grouped).sort((a, b) => a[0].localeCompare(b[0])).map(([name, count]) => `  ${count}x ${name}`).join('\n') + '\n';
             };
-
-            let logContent = `Oyuncu: ${playerName}\n`;
-            logContent += `Durum: ${isDead ? 'Öldü' : 'Hayatta'}\n`;
-            logContent += `Rapor Tarihi: ${date}\n\n`;
-            logContent += `--- KENDİNE AYIRDIĞI EŞYALAR (${kept.length} adet) ---\n`;
-            logContent += formatItemList(kept);
-            logContent += `\n`;
-            logContent += `--- GUILD SANDIĞINA ATTIĞI EŞYALAR (${deposited.length} adet) ---\n`;
-            logContent += formatItemList(deposited);
-
+            let logContent = `Oyuncu: ${playerName}\nDurum: ${isDead ? 'Öldü' : 'Hayatta'}\nRapor Tarihi: ${date}\n\n--- KENDİNE AYIRDIĞI EŞYALAR (${kept.length} adet) ---\n${formatItemList(kept)}\n--- GUILD SANDIĞINA ATTIĞI EŞYALAR (${deposited.length} adet) ---\n${formatItemList(deposited)}`;
             const blob = new Blob([logContent], { type: 'text/plain;charset=utf-8' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -600,7 +837,6 @@
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         }
-
         function setupExportButtons(comparison) {
             document.querySelectorAll('.export-log-btn').forEach(button => {
                 button.addEventListener('click', (e) => {
@@ -611,35 +847,23 @@
                 });
             });
         }
-        
-        // --- ARAMA FİLTRESİ ---
         function setupSearchFilter() {
             const searchInput = document.getElementById('searchInput');
-            
             searchInput.addEventListener('input', (e) => {
                 const searchTerm = e.target.value.toLowerCase();
-                
                 document.querySelectorAll('.result-card').forEach(card => {
                     const playerName = card.querySelector('.player-name').textContent.toLowerCase();
-                    if (playerName.includes(searchTerm)) {
-                        card.style.display = 'block';
-                    } else {
-                        card.style.display = 'none';
-                    }
+                    card.style.display = playerName.includes(searchTerm) ? 'block' : 'none';
                 });
             });
         }
-
-        // --- TAB SWITCHING ---
         function setupTabs() {
             const tabButtons = document.querySelectorAll('.tab-btn');
             const tabContents = document.querySelectorAll('.tab-content');
-            
             tabButtons.forEach(btn => btn.classList.remove('active'));
             document.querySelector('.tab-btn[data-tab="all-players"]').classList.add('active');
             tabContents.forEach(content => content.classList.add('hidden'));
             document.getElementById('tab-all-players').classList.remove('hidden');
-
             tabButtons.forEach(button => {
                 button.addEventListener('click', () => {
                     const tabId = button.dataset.tab;
@@ -648,129 +872,10 @@
                     tabContents.forEach(content => {
                         content.id === `tab-${tabId}` ? content.classList.remove('hidden') : content.classList.add('hidden');
                     });
-                    
                     const searchWrapper = document.getElementById('search-wrapper');
-                    if (tabId === 'all-players' || tabId === 'kept') {
-                        searchWrapper.style.display = 'block';
-                    } else {
-                        searchWrapper.style.display = 'none';
-                    }
+                    searchWrapper.style.display = (tabId === 'all-players' || tabId === 'kept') ? 'block' : 'none';
                 });
             });
-        }
-
-        // --- GEMINI API INTEGRATION ---
-        function displayGeminiButton() {
-            const container = document.getElementById('gemini-summary-section');
-            container.innerHTML = `
-                <div class="text-center">
-                    <button id="gemini-btn" class="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-3 px-8 rounded-lg text-lg transition-all transform hover:scale-105 shadow-lg shadow-purple-900/50">
-                        ✨ Etkinlik Özeti Oluştur
-                    </button>
-                </div>
-                <div id="gemini-result" class="hidden mt-6 glass-panel p-6"></div>
-            `;
-            document.getElementById('gemini-btn').addEventListener('click', handleGeminiSummary);
-        }
-
-        function prepareSummaryData(analysisData) {
-            const { comparison, deadPlayers } = analysisData;
-            const players = Object.keys(comparison).filter(p => comparison[p].totalLooted > 0);
-
-            const topDepositors = players.sort((a, b) => comparison[b].deposited.length - comparison[a].deposited.length)
-                .slice(0, 3)
-                .map(p => `${p} (${comparison[p].deposited.length} eşya)`);
-            
-            const allItems = Object.values(comparison).flatMap(p => [...p.deposited, ...p.kept]);
-            const valuableItems = allItems
-                .map(i => i.name)
-                .filter(name => name.includes("Master's") || name.includes("Grandmaster's") || name.includes("Elder's") || name.includes(".3") || name.includes(".4"))
-                .slice(0, 5); // Limit for brevity
-
-            return `
-                Katılımcı Sayısı: ${players.length}
-                Ölen Oyuncular: ${deadPlayers.size > 0 ? Array.from(deadPlayers).join(', ') : 'Kimse ölmedi, harika iş!'}
-                En Çok Eşya Yatıranlar: ${topDepositors.join(', ')}
-                Düşen Değerli Eşyalardan Bazıları: ${valuableItems.length > 0 ? valuableItems.join(', ') : 'Kayda değer bir şey düşmedi.'}
-            `;
-        }
-        
-        async function handleGeminiSummary() {
-            const button = document.getElementById('gemini-btn');
-            const resultContainer = document.getElementById('gemini-result');
-            
-            button.disabled = true;
-            button.textContent = '🧠 Yapay Zeka Düşünüyor...';
-            resultContainer.classList.add('hidden');
-
-            const dataSummary = prepareSummaryData(currentAnalysisData);
-            // DÜZELTME: Hatalı ters eğik çizgi kaldırıldı.
-            const prompt = `
-                Sen Team Supremacy adlı bir Albion Online guildinin liderisin. Aşağıdaki verileri kullanarak, Discord'da paylaşmak üzere kısa, esprili ve motive edici bir etkinlik özeti yaz.
-                - Ölen oyuncularla nazikçe dalga geçebilirsin.
-                - En çok katkı sağlayanları onurlandır.
-                - Genel olarak pozitif ve eğlenceli bir dil kullan.
-                - Özeti Markdown formatında, başlıklar ve listeler kullanarak düzenle.
-
-                İşte etkinlik verileri:
-                ${dataSummary}
-            `;
-
-            try {
-                let chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
-                const payload = { contents: chatHistory };
-                const apiKey = ""; // Provided by the environment
-                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
-                
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-
-                if (!response.ok) {
-                    throw new Error(`API isteği başarısız: ${response.status}`);
-                }
-
-                const result = await response.json();
-                const summaryText = result.candidates[0].content.parts[0].text;
-                
-                resultContainer.innerHTML = `
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-xl font-bold text-purple-400">✨ Yapay Zeka Etkinlik Özeti</h3>
-                        <button id="copy-summary-btn" class="bg-stone-700 hover:bg-stone-600 text-xs font-bold py-1 px-3 rounded-md transition">Özeti Kopyala</button>
-                    </div>
-                    <div class="gemini-summary-container"><pre>${summaryText}</pre></div>
-                `;
-                resultContainer.classList.remove('hidden');
-                resultContainer.classList.add('fade-in');
-
-                document.getElementById('copy-summary-btn').addEventListener('click', () => {
-                    const copyButton = document.getElementById('copy-summary-btn');
-                    // execCommand, iframe kısıtlamaları için daha güvenilir bir yöntemdir.
-                    const textArea = document.createElement("textarea");
-                    textArea.value = summaryText;
-                    document.body.appendChild(textArea);
-                    textArea.select();
-                    try {
-                        document.execCommand('copy');
-                        copyButton.textContent = 'Kopyalandı!';
-                    } catch (err) {
-                        console.error('Kopyalama başarısız oldu', err);
-                        copyButton.textContent = 'Hata!';
-                    }
-                    document.body.removeChild(textArea);
-                    setTimeout(() => { copyButton.textContent = 'Özeti Kopyala'; }, 2000);
-                });
-
-            } catch (error) {
-                console.error("Gemini API hatası:", error);
-                resultContainer.innerHTML = '<p class="text-red-400">Özet oluşturulurken bir hata oluştu. Lütfen daha sonra tekrar deneyin.</p>';
-                resultContainer.classList.remove('hidden');
-            } finally {
-                button.disabled = false;
-                button.innerHTML = '✨ Etkinlik Özeti Oluştur';
-            }
         }
     </script>
 </body>
