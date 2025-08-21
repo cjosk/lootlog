@@ -121,9 +121,7 @@
     <div class="max-w-7xl mx-auto p-4 sm:p-8">
         <!-- Header -->
         <header class="flex items-center gap-5 mb-10">
-            <img src="https://i.hizliresim.com/pu29soc.png" 
-     alt="Team Supremacy Logosu" 
-     class="w-24 h-24 rounded-xl object-contain bg-black p-2">
+            <img src="https://i.hizliresim.com/pu29soc.png" alt="Team Supremacy Logosu" class="w-14 h-14 rounded-md">
             <div>
                 <h1 class="text-3xl sm:text-4xl font-extrabold text-white">Team Supremacy</h1>
                 <p class="text-gray-400">Loot Takip Paneli</p>
@@ -187,22 +185,16 @@
         </main>
     </div>
     
-    <!-- Ölüm Detayları Modalı -->
-    <div id="death-modal" class="modal-backdrop hidden fade-in">
-        <div class="glass-panel p-6 w-full max-w-2xl m-4">
-            <div class="flex justify-between items-center mb-4">
-                <h3 id="modal-title" class="text-xl font-bold text-white">Ölüm Raporu</h3>
-                <button id="close-modal-btn" class="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
-            </div>
-            <div id="modal-content" class="text-gray-300 max-h-[70vh] overflow-y-auto"></div>
-        </div>
-    </div>
+    <!-- Modal Pencereleri -->
+    <div id="death-modal" class="modal-backdrop hidden fade-in"></div>
+    <div id="price-modal" class="modal-backdrop hidden fade-in"></div>
 
     <script>
         // --- GLOBAL STATE ---
         let currentAnalysisData = {};
         let guildMembers = new Map();
         let valueChart = null;
+        let priceMap = {};
 
         // --- SETUP ---
         document.addEventListener('mousemove', e => {
@@ -235,7 +227,7 @@
             const apiStatusContainer = document.getElementById('api-status-container');
             
             resultsContainer.innerHTML = '<div class="text-center text-xl font-semibold text-gray-400 p-8">Sonuçlar hesaplanıyor...</div>';
-            apiStatusContainer.innerHTML = ''; // Clear previous status
+            apiStatusContainer.innerHTML = '';
             resultsWrapper.classList.remove('hidden');
             resultsWrapper.classList.add('fade-in');
             
@@ -373,23 +365,16 @@
             }
         }
 
-        async function fetchItemPrices(itemIds) {
-            if (itemIds.length === 0) return {};
-            const apiUrl = `https://europe.albion-online-data.com/api/v2/stats/prices/${itemIds.join(',')}?locations=Caerleon,Brecilien,Fort%20Sterling,Lymhurst,Martlock,Thetford,Bridgewatch`;
+        async function fetchItemPrices(itemIds, locations = 'Caerleon') {
+            if (itemIds.length === 0) return [];
+            const apiUrl = `https://europe.albion-online-data.com/api/v2/stats/prices/${itemIds.join(',')}?locations=${locations}`;
             try {
-                const priceData = await fetch(apiUrl);
-                if (!priceData.ok) throw new Error('Fiyatlar alınamadı.');
-                const prices = await priceData.json();
-                const priceMap = {};
-                prices.forEach(item => {
-                    if (item.sell_price_min > 0) {
-                        priceMap[item.item_id] = item.sell_price_min;
-                    }
-                });
-                return priceMap;
+                const response = await fetch(apiUrl);
+                if (!response.ok) throw new Error('Fiyatlar alınamadı.');
+                return await response.json();
             } catch (error) {
                 console.error("Fiyat API Hatası:", error);
-                return {};
+                return [];
             }
         }
 
@@ -416,7 +401,7 @@
                 if (!playerName || !itemName || isNaN(quantity)) continue;
                 if (!playerItems[playerName]) playerItems[playerName] = [];
                 for (let j = 0; j < quantity; j++) {
-                    const item = { id: itemId, name: itemName, timestamp: timestamp };
+                    const item = { id: itemId, name: itemName, timestamp: timestamp, looter: playerName };
                     playerItems[playerName].push(item);
                     lootEvents.push(item);
                 }
@@ -553,12 +538,25 @@
                     </div>
                 </div>
             `;
+
+            const uniqueItemIds = [...new Set(lootEvents.map(e => e.id))];
+            const priceArray = await fetchItemPrices(uniqueItemIds, 'Caerleon,Brecilien,Fort%20Sterling,Lymhurst,Martlock,Thetford,Bridgewatch');
+            priceMap = priceArray.reduce((map, item) => {
+                if (item.sell_price_min > 0) {
+                    if (!map[item.item_id] || map[item.item_id].sell_price_min > item.sell_price_min) {
+                        map[item.item_id] = item;
+                    }
+                }
+                return map;
+            }, {});
+
             displayAllPlayersTab(comparison);
             displayDepositedTab(comparison);
             displayKeptTab(comparison);
             displayTrashTab(trashItems);
             displayLootedFromTab(deadPlayers);
-            await displayValueTab(lootEvents); // Fiyatları çekeceği için async
+            displayValueTab(lootEvents, comparison, priceMap);
+            
             setupManualAdd();
             setupTabs();
             setupExportButtons(comparison);
@@ -678,13 +676,10 @@
             container.innerHTML = `<h3 class="text-xl font-semibold text-orange-400 mb-4">Eşyası Alınan Oyuncular</h3><ul class="space-y-1 pl-2 columns-2 md:columns-3">${groupItemsToTextListHtml(deadPlayersArray, 'Kimseden eşya alınmamış.')}</ul>`;
         }
 
-        async function displayValueTab(lootEvents) {
+        async function displayValueTab(lootEvents, comparison, priceMap) {
             const container = document.getElementById('tab-value');
-            container.innerHTML = '<p class="text-center text-gray-400">Eşya fiyatları Albion Data Project üzerinden alınıyor...</p>';
+            container.innerHTML = '<p class="text-center text-gray-400">Loot değeri hesaplanıyor...</p>';
             
-            const uniqueItemIds = [...new Set(lootEvents.map(e => e.id))];
-            const priceMap = await fetchItemPrices(uniqueItemIds);
-
             if (Object.keys(priceMap).length === 0) {
                 container.innerHTML = '<p class="text-center text-red-400">Eşya fiyatları alınamadı. Lütfen daha sonra tekrar deneyin.</p>';
                 return;
@@ -695,20 +690,104 @@
             lootEvents.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
             for (const event of lootEvents) {
-                cumulativeValue += priceMap[event.id] || 0;
+                cumulativeValue += priceMap[event.id]?.sell_price_min || 0;
                 chartData.push({
                     x: new Date(event.timestamp),
                     y: cumulativeValue
                 });
             }
+            
+            const mostValuableItems = [...lootEvents]
+                .map(item => ({ ...item, value: priceMap[item.id]?.sell_price_min || 0}))
+                .sort((a,b) => b.value - a.value)
+                .slice(0, 5);
+
+            let mostValuableHtml = mostValuableItems.map(item => `
+                <div class="flex items-center justify-between text-sm">
+                    <div class="flex items-center gap-2">
+                        <img src="https://render.albiononline.com/v1/item/${item.id}.png" class="w-8 h-8 rounded">
+                        <span>${item.name}</span>
+                    </div>
+                    <span class="font-semibold">${item.value.toLocaleString('tr-TR')}</span>
+                </div>
+            `).join('');
+
+            // High Value Items Logic
+            const highValueItems = lootEvents
+                .map(item => ({...item, value: priceMap[item.id]?.sell_price_min || 0}))
+                .filter(item => item.value > 1000000)
+                .sort((a,b) => b.value - a.value);
+            
+            const depositedItemsTemp = {};
+            Object.entries(comparison).forEach(([player, data]) => {
+                depositedItemsTemp[player] = data.deposited.map(item => item.name);
+            });
+
+            let highValueHtml = '<p class="text-gray-400">1 Milyon gümüşten değerli eşya bulunamadı.</p>';
+            if (highValueItems.length > 0) {
+                highValueHtml = '<div class="space-y-2">';
+                highValueItems.forEach(item => {
+                    let status = '<span class="text-red-400 font-semibold">TUTULDU</span>';
+                    const looterDeposits = depositedItemsTemp[item.looter];
+                    if (looterDeposits) {
+                        const depositedIndex = looterDeposits.indexOf(item.name);
+                        if (depositedIndex > -1) {
+                            status = '<span class="text-green-400 font-semibold">TESLİM EDİLDİ</span>';
+                            looterDeposits.splice(depositedIndex, 1);
+                        }
+                    }
+                    highValueHtml += `
+                        <div class="flex items-center justify-between bg-stone-900/50 p-2 rounded-lg text-sm">
+                            <div class="flex items-center gap-2">
+                                <img src="https://render.albiononline.com/v1/item/${item.id}.png" class="w-8 h-8 rounded">
+                                <div><p class="font-semibold text-white">${item.name}</p><p class="text-xs text-gray-400">Toplayan: ${item.looter}</p></div>
+                            </div>
+                            <div class="text-right"><p class="font-bold text-white">${item.value.toLocaleString('tr-TR')}</p><p class="text-xs">${status}</p></div>
+                        </div>`;
+                });
+                highValueHtml += '</div>';
+            }
+
+            // All Loot Items Logic
+            const groupedItems = lootEvents.reduce((acc, item) => {
+                if (!acc[item.id]) {
+                    acc[item.id] = { ...item, count: 0 };
+                }
+                acc[item.id].count++;
+                return acc;
+            }, {});
+            const allLootHtml = Object.values(groupedItems)
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map(item => `
+                    <button class="item-slot item-price-check" title="${item.count}x ${item.name}" data-item-id="${item.id}" data-item-name="${item.name}">
+                        <img src="https://render.albiononline.com/v1/item/${item.id}.png" alt="${item.name}" onerror="this.onerror=null;this.src='https://placehold.co/68x68/1f2937/44403c?text=?';">
+                        <span class="item-quantity">${item.count > 1 ? item.count : ''}</span>
+                    </button>
+                `).join('');
 
             container.innerHTML = `
-                <div class="text-center mb-6">
-                    <h3 class="text-lg font-medium text-gray-400">Toplam Ganimet Değeri</h3>
-                    <p class="text-4xl font-bold text-white">${cumulativeValue.toLocaleString('tr-TR')} <span class="text-2xl text-gray-500">Silver</span></p>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-2">
+                        <div class="text-center mb-6">
+                            <h3 class="text-lg font-medium text-gray-400">Toplam Ganimet Değeri</h3>
+                            <p class="text-4xl font-bold text-white">${cumulativeValue.toLocaleString('tr-TR')} <span class="text-2xl text-gray-500">Silver</span></p>
+                        </div>
+                        <canvas id="valueChart"></canvas>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-semibold text-white mb-4">En Değerli 5 Ganimet</h3>
+                        <div class="space-y-3 mb-6">${mostValuableHtml}</div>
+                        <h3 class="text-lg font-semibold text-white mb-4">Değerli Eşyalar (>1m)</h3>
+                        <div class="space-y-3">${highValueHtml}</div>
+                    </div>
                 </div>
-                <canvas id="valueChart"></canvas>
+                <hr class="my-6 border-stone-700">
+                <div>
+                    <h3 class="text-lg font-semibold text-white mb-4">Tüm Ganimetler (Fiyat Kontrolü için Tıkla)</h3>
+                    <div class="item-grid">${allLootHtml}</div>
+                </div>
             `;
+            setupPriceCheckButtons();
 
             const ctx = document.getElementById('valueChart').getContext('2d');
             if (valueChart) {
@@ -730,47 +809,27 @@
                 options: {
                     responsive: true,
                     scales: {
-                        x: {
-                            type: 'time',
-                            time: {
-                                unit: 'minute',
-                                tooltipFormat: 'HH:mm:ss',
-                                displayFormats: {
-                                    minute: 'HH:mm'
-                                }
-                            },
-                            ticks: { color: '#a8a29e' }
-                        },
-                        y: {
-                            beginAtZero: true,
-                            ticks: { 
-                                color: '#a8a29e',
-                                callback: function(value) {
-                                    if (value >= 1000000) return (value / 1000000) + 'm';
-                                    if (value >= 1000) return (value / 1000) + 'k';
-                                    return value;
-                                }
-                            }
-                        }
+                        x: { type: 'time', time: { unit: 'minute', tooltipFormat: 'HH:mm:ss', displayFormats: { minute: 'HH:mm' }}, ticks: { color: '#a8a29e' }},
+                        y: { beginAtZero: true, ticks: { color: '#a8a29e', callback: function(value) { if (value >= 1000000) return (value / 1000000) + 'm'; if (value >= 1000) return (value / 1000) + 'k'; return value; }}}
                     },
-                    plugins: {
-                        legend: { display: false }
-                    }
+                    plugins: { legend: { display: false } }
                 }
             });
         }
         
-        // --- MODAL & DEATH CHECK ---
-        function setupModal() {
-            const modal = document.getElementById('death-modal');
-            const closeBtn = document.getElementById('close-modal-btn');
+        // --- MODAL & DEATH CHECK & PRICE CHECK ---
+        function setupModal(modalId, closeBtnId) {
+            const modal = document.getElementById(modalId);
+            if (!modal) return;
+            const closeBtn = modal.querySelector(closeBtnId);
             closeBtn.onclick = () => modal.classList.add('hidden');
-            window.onclick = (event) => {
+            modal.onclick = (event) => {
                 if (event.target == modal) {
                     modal.classList.add('hidden');
                 }
             }
         }
+
         function setupDeathCheckButtons() {
             document.querySelectorAll('.death-check-btn').forEach(button => {
                 button.addEventListener('click', async (e) => {
@@ -784,10 +843,17 @@
                     const deathData = await fetchLastDeath(playerId);
                     
                     const modal = document.getElementById('death-modal');
-                    const modalTitle = document.getElementById('modal-title');
+                    modal.innerHTML = `
+                        <div class="glass-panel p-6 w-full max-w-2xl m-4">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 id="modal-title" class="text-xl font-bold text-white">${playerName} - Son Ölüm Raporu</h3>
+                                <button id="close-death-modal-btn" class="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+                            </div>
+                            <div id="modal-content" class="text-gray-300 max-h-[70vh] overflow-y-auto"></div>
+                        </div>
+                    `;
                     const modalContent = document.getElementById('modal-content');
                     
-                    modalTitle.textContent = `${playerName} - Son Ölüm Raporu`;
                     if (deathData) {
                         const deathDate = new Date(deathData.TimeStamp).toLocaleString('tr-TR');
                         const killer = deathData.Killer;
@@ -808,13 +874,70 @@
                         modalContent.innerHTML = '<p>Bu oyuncu için yakın zamanda bir ölüm kaydı bulunamadı.</p>';
                     }
                     modal.classList.remove('hidden');
+                    setupModal('death-modal', '#close-death-modal-btn');
                     btn.textContent = originalText;
                     btn.disabled = false;
                 });
             });
         }
 
-        // --- LOG EXPORT, SEARCH, TABS ---
+        function setupPriceCheckButtons() {
+            document.querySelectorAll('.item-price-check').forEach(button => {
+                button.addEventListener('click', async (e) => {
+                    const btn = e.currentTarget;
+                    const itemId = btn.dataset.itemId;
+                    const itemName = btn.dataset.itemName;
+                    const modal = document.getElementById('price-modal');
+                    modal.innerHTML = `
+                         <div class="glass-panel p-6 w-full max-w-4xl m-4">
+                            <div class="flex justify-between items-center mb-4">
+                                <div class="flex items-center gap-3">
+                                    <img src="https://render.albiononline.com/v1/item/${itemId}.png" class="w-10 h-10 rounded-md">
+                                    <h3 class="text-xl font-bold text-white">${itemName} - Piyasa Fiyatları</h3>
+                                </div>
+                                <button id="close-price-modal-btn" class="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+                            </div>
+                            <div id="price-modal-content" class="text-gray-300 max-h-[70vh] overflow-y-auto">
+                                <p>Fiyatlar alınıyor...</p>
+                            </div>
+                        </div>
+                    `;
+                    modal.classList.remove('hidden');
+                    setupModal('price-modal', '#close-price-modal-btn');
+
+                    const priceData = await fetchItemPrices([itemId], 'Caerleon,Brecilien,Fort%20Sterling,Lymhurst,Martlock,Thetford,Bridgewatch');
+                    const modalContent = document.getElementById('price-modal-content');
+                    
+                    const priceTable = priceData.length > 0 ? `
+                        <table class="w-full text-left text-sm">
+                            <thead class="border-b border-stone-600 text-gray-400">
+                                <tr>
+                                    <th class="p-2">Şehir</th>
+                                    <th class="p-2">Kalite</th>
+                                    <th class="p-2 text-green-400">Min. Satış</th>
+                                    <th class="p-2 text-red-400">Max. Alış</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${priceData.map(data => `
+                                    <tr class="border-b border-stone-700">
+                                        <td class="p-2">${data.city}</td>
+                                        <td class="p-2">${data.quality}</td>
+                                        <td class="p-2 text-green-300">${data.sell_price_min > 0 ? data.sell_price_min.toLocaleString('tr-TR') : '-'}</td>
+                                        <td class="p-2 text-red-300">${data.buy_price_max > 0 ? data.buy_price_max.toLocaleString('tr-TR') : '-'}</td>
+                                    </tr>
+                                `).join('')
+                                }
+                            </tbody>
+                        </table>
+                    ` : '<p>Bu eşya için fiyat verisi bulunamadı.</p>';
+
+                    modalContent.innerHTML = priceTable;
+                });
+            });
+        }
+
+        // --- Diğer setup fonksiyonları (LOG EXPORT, SEARCH, TABS) burada yer alıyor ---
         function generateAndDownloadLog(playerName, playerData) {
             const { kept, deposited, isDead } = playerData;
             const date = new Date().toLocaleString('tr-TR');
